@@ -10,8 +10,8 @@ import lime.math.Vector4;
 @:noDebug
 #end
 /**
-	The `AudioSource` class provides a way to control audio playback in a Lime application. 
-	It allows for playing, pausing, and stopping audio, as well as controlling various 
+	The `AudioSource` class provides a way to control audio playback in a Lime application.
+	It allows for playing, pausing, and stopping audio, as well as controlling various
 	audio properties such as gain, pitch, and looping.
 
 	Depending on the platform, the audio backend may vary, but the API remains consistent.
@@ -20,15 +20,22 @@ import lime.math.Vector4;
 **/
 class AudioSource
 {
+	private static var activeSources:Array<AudioSource> = [];
+
 	/**
 		An event that is dispatched when the audio playback is complete.
 	**/
 	public var onComplete = new Event<Void->Void>();
-	
+
 	/**
 		The `AudioBuffer` associated with this `AudioSource`.
 	**/
 	public var buffer:AudioBuffer;
+
+	/**
+		An property if this 'AudioSource' is playing.
+	**/
+	public var playing(get, null):Bool;
 
 	/**
 		The current playback position of the audio, in milliseconds.
@@ -97,14 +104,16 @@ class AudioSource
 	/**
 		Releases any resources used by this `AudioSource`.
 	**/
-	public function dispose():Void
+	inline public function dispose():Void
 	{
 		__backend.dispose();
+		activeSources.remove(this);
 	}
 
-	@:noCompletion private function init():Void
+	@:noCompletion inline private function init():Void
 	{
 		__backend.init();
+		activeSources.push(this);
 	}
 
 	/**
@@ -132,6 +141,11 @@ class AudioSource
 	}
 
 	// Get & Set Methods
+	@:noCompletion inline private function get_playing():Bool
+	{
+		@:privateAccess return __backend.playing;
+	}
+
 	@:noCompletion private function get_currentTime():Int
 	{
 		return __backend.getCurrentTime();

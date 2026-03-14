@@ -7,10 +7,13 @@ import lime.math.Vector4;
 import lime.media.openal.AL;
 import lime.media.openal.ALBuffer;
 import lime.media.openal.ALSource;
+import lime.media.vorbis.Vorbis;
 import lime.media.vorbis.VorbisFile;
+
 import lime.media.AudioManager;
 import lime.media.AudioSource;
 import lime.utils.UInt8Array;
+import lime.utils.ArrayBufferView;
 
 #if !lime_debug
 @:fileXml('tags="haxe,release"')
@@ -145,16 +148,7 @@ class NativeAudioSource
 			}
 		}
 
-		samples = Std.int((dataLength * 8.0) / (parent.buffer.channels * parent.buffer.bitsPerSample));
-
-		if (Application.current != null && !stream)
-		{
-			if (!Application.current.onUpdate.has(checkPlay))
-			{
-					// trace('[AUDIO] added play check event!');
-				Application.current.onUpdate.add(checkPlay);
-			}
-		}
+		samples = Std.int((dataLength * 8) / (parent.buffer.channels * parent.buffer.bitsPerSample));
 	}
 
 	public function play():Void
@@ -204,6 +198,8 @@ class NativeAudioSource
 		else
 		{
 			var time = completed ? 0 : getCurrentTime();
+
+			AL.sourcePlay(handle);
 
 			setCurrentTime(time);
 		}
@@ -424,8 +420,10 @@ class NativeAudioSource
 				var offset = AL.getSourcei(handle, AL.BYTE_OFFSET);
 				var ratio = (offset / dataLength);
 				var totalSeconds = samples / parent.buffer.sampleRate;
+
 				var time = Std.int(totalSeconds * ratio * 1000) - parent.offset;
 
+				// var time = Std.int (AL.getSourcef (handle, AL.SEC_OFFSET) * 1000) - parent.offset;
 				if (time < 0) return 0;
 				return time;
 			}
@@ -630,5 +628,4 @@ class NativeAudioSource
 
 		return position;
 	}
-
 }
