@@ -65,7 +65,6 @@ class AndroidPlatform extends PlatformTarget
 				hardware: true,
 				display: 0,
 				resizable: true,
-				transparent: false,
 				borderless: false,
 				orientation: Orientation.AUTO,
 				vsync: false,
@@ -517,7 +516,6 @@ class AndroidPlatform extends PlatformTarget
 			"android:label": project.meta.title,
 			"android:allowBackup": "true",
 			"android:theme": "@style/LimeAppMainTheme" + (project.window.fullscreen ? "Fullscreen" : ""),
-			"android:enableOnBackInvokedCallback": "false",
 			"android:hardwareAccelerated": "true",
 			"android:allowNativeHeapPointerTagging": context.ANDROID_TARGET_SDK_VERSION >= 30 ? "false" : null,
 			"android:largeHeap": "true"
@@ -526,9 +524,7 @@ class AndroidPlatform extends PlatformTarget
 		context.ANDROID_ACTIVITY = project.config.getKeyValueArray("android.activity", {
 			"android:name": "MainActivity",
 			"android:exported": "true",
-			"android:alwaysRetainTaskState": "true",
-			"android:launchMode": "singleInstance",
-			"android:preferMinimalPostProcessing": "true",
+			"android:launchMode": "singleTask",
 			"android:label": project.meta.title,
 			"android:resizeableActivity": '${project.window.resizable}',
 			"android:configChanges": project.config.getArrayString("android.configChanges",

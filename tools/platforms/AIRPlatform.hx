@@ -64,7 +64,6 @@ class AIRPlatform extends FlashPlatform
 				hardware: true,
 				display: 0,
 				resizable: true,
-				transparent: false,
 				borderless: false,
 				orientation: Orientation.AUTO,
 				vsync: false,

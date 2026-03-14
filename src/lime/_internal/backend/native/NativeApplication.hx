@@ -1,6 +1,5 @@
 package lime._internal.backend.native;
 
-import haxe.Int64;
 import haxe.Timer;
 import lime._internal.backend.native.NativeCFFI;
 import lime.app.Application;
@@ -61,6 +60,7 @@ class NativeApplication
 
 	public var handle:Dynamic;
 
+	private var pauseTimer:Int;
 	private var parent:Application;
 	private var toggleFullscreen:Bool;
 
@@ -74,17 +74,40 @@ class NativeApplication
 	public function new(parent:Application):Void
 	{
 		this.parent = parent;
-
+		pauseTimer = -1;
 		toggleFullscreen = true;
 
 		AudioManager.init();
 
 		#if (!macro && lime_cffi)
 		handle = NativeCFFI.lime_application_create();
+		#end
 
-		Sensor.registerSensor(SensorType.ACCELEROMETER, NativeCFFI.lime_system_get_first_accelerometer_sensor_id());
+		#if (ios || android)
+		final accelerometerID:Int = NativeCFFI.lime_system_get_first_accelerometer_sensor_id();
 
-		Sensor.registerSensor(SensorType.GYROSCOPE, NativeCFFI.lime_system_get_first_gyroscope_sensor_id());
+		if (accelerometerID > 0)
+			Sensor.registerSensor(SensorType.ACCELEROMETER, accelerometerID);
+
+		final gyroscopeID:Int = NativeCFFI.lime_system_get_first_gyroscope_sensor_id();
+
+		if (gyroscopeID > 0)
+			Sensor.registerSensor(SensorType.GYROSCOPE, gyroscopeID);
+		#end
+	}
+
+	private function advanceTimer():Void
+	{
+		#if (lime_cffi && !macro)
+		if (pauseTimer > -1)
+		{
+			var offset = System.getTimer() - pauseTimer;
+			for (i in 0...Timer.sRunningTimers.length)
+			{
+				if (Timer.sRunningTimers[i] != null) Timer.sRunningTimers[i].mFireAt += offset;
+			}
+			pauseTimer = -1;
+		}
 		#end
 	}
 
@@ -100,10 +123,12 @@ class NativeApplication
 		NativeCFFI.lime_key_event_manager_register(handleKeyEvent, keyEventInfo);
 		NativeCFFI.lime_mouse_event_manager_register(handleMouseEvent, mouseEventInfo);
 		NativeCFFI.lime_render_event_manager_register(handleRenderEvent, renderEventInfo);
-		NativeCFFI.lime_sensor_event_manager_register(handleSensorEvent, sensorEventInfo);
 		NativeCFFI.lime_text_event_manager_register(handleTextEvent, textEventInfo);
 		NativeCFFI.lime_touch_event_manager_register(handleTouchEvent, touchEventInfo);
 		NativeCFFI.lime_window_event_manager_register(handleWindowEvent, windowEventInfo);
+		#if (ios || android)
+		NativeCFFI.lime_sensor_event_manager_register(handleSensorEvent, sensorEventInfo);
+		#end
 		#end
 
 		#if (nodejs && lime_cffi)
@@ -154,14 +179,7 @@ class NativeApplication
 		switch (applicationEventInfo.type)
 		{
 			case UPDATE:
-				// https://github.com/HeapsIO/heaps/blob/bade3542a2f148785f9458a7988de8bc4034e0af/hxd/System.hl.hx#L156-L169
-				#if (haxe_ver >= 5)
-				sys.thread.Thread.current().events.loopOnce();
-				#elseif (target.threaded && (haxe_ver >= 4.2))
-				sys.thread.Thread.current().events.progress();
-				#else
-				@:privateAccess haxe.MainLoop.tick();
-				#end
+				updateTimer();
 
 				parent.onUpdate.dispatch(applicationEventInfo.deltaTime);
 
@@ -176,23 +194,9 @@ class NativeApplication
 
 	private function handleDropEvent():Void
 	{
-		var window = parent.__windowByID.get(dropEventInfo.windowID);
-
-		if (window != null)
+		for (window in parent.windows)
 		{
-			switch (dropEventInfo.type)
-			{
-				case DROP_FILE:
-					window.onDropFile.dispatch(CFFI.stringValue(dropEventInfo.data), CFFI.stringValue(dropEventInfo.source), dropEventInfo.x, dropEventInfo.y);
-				case DROP_TEXT:
-					window.onDropText.dispatch(CFFI.stringValue(dropEventInfo.data), CFFI.stringValue(dropEventInfo.source), dropEventInfo.x, dropEventInfo.y);
-				case DROP_BEGIN:
-					window.onDropBegin.dispatch();
-				case DROP_COMPLETE:
-					window.onDropComplete.dispatch(dropEventInfo.x, dropEventInfo.y);
-				case DROP_POSITION:
-					window.onDropPosition.dispatch(dropEventInfo.x, dropEventInfo.y);
-			}
+			window.onDropFile.dispatch(CFFI.stringValue(dropEventInfo.file));
 		}
 	}
 
@@ -204,21 +208,21 @@ class NativeApplication
 				var gamepad = Gamepad.devices.get(gamepadEventInfo.id);
 				if (gamepad != null) {
 					gamepad.onAxisMove.dispatch(gamepadEventInfo.axis, gamepadEventInfo.axisValue);
-					gamepad.onAxisMovePrecise.dispatch(gamepadEventInfo.axis, gamepadEventInfo.axisValue, Int64.fromFloat(gamepadEventInfo.timestamp));
+					gamepad.onAxisMovePrecise.dispatch(gamepadEventInfo.axis, gamepadEventInfo.axisValue, gamepadEventInfo.timestamp);
 				}
 
 			case BUTTON_DOWN:
 				var gamepad = Gamepad.devices.get(gamepadEventInfo.id);
 				if (gamepad != null) {
 					gamepad.onButtonDown.dispatch(gamepadEventInfo.button);
-					gamepad.onButtonDownPrecise.dispatch(gamepadEventInfo.button, Int64.fromFloat(gamepadEventInfo.timestamp));
+					gamepad.onButtonDownPrecise.dispatch(gamepadEventInfo.button, gamepadEventInfo.timestamp);
 				}
 
 			case BUTTON_UP:
 				var gamepad = Gamepad.devices.get(gamepadEventInfo.id);
 				if (gamepad != null) {
 					gamepad.onButtonUp.dispatch(gamepadEventInfo.button);
-					gamepad.onButtonUpPrecise.dispatch(gamepadEventInfo.button, Int64.fromFloat(gamepadEventInfo.timestamp));
+					gamepad.onButtonUpPrecise.dispatch(gamepadEventInfo.button, gamepadEventInfo.timestamp);
 				}
 
 			case CONNECT:
@@ -267,7 +271,7 @@ class NativeApplication
 			var int32:Float = keyEventInfo.keyCode;
 			var keyCode:KeyCode = Std.int(int32);
 			var modifier:KeyModifier = keyEventInfo.modifier;
-			var timestamp:Int64 = Int64.fromFloat(keyEventInfo.timestamp);
+			var timestamp = keyEventInfo.timestamp;
 
 			switch (type)
 			{
@@ -525,6 +529,7 @@ class NativeApplication
 			switch (windowEventInfo.type)
 			{
 				case WINDOW_ACTIVATE:
+					advanceTimer();
 					window.onActivate.dispatch();
 					AudioManager.resume();
 
@@ -534,6 +539,7 @@ class NativeApplication
 				case WINDOW_DEACTIVATE:
 					window.onDeactivate.dispatch();
 					AudioManager.suspend();
+					pauseTimer = System.getTimer();
 
 				case WINDOW_ENTER:
 					window.onEnter.dispatch();
@@ -585,14 +591,64 @@ class NativeApplication
 			}
 		}
 	}
+
+	private function updateTimer():Void
+	{
+		#if (lime_cffi && !macro)
+		if (Timer.sRunningTimers.length > 0)
+		{
+			var currentTime = System.getTimer();
+			var foundNull = false;
+			var timer;
+
+			for (i in 0...Timer.sRunningTimers.length)
+			{
+				timer = Timer.sRunningTimers[i];
+
+				if (timer != null)
+				{
+					if (timer.mRunning && currentTime >= timer.mFireAt)
+					{
+						timer.mFireAt += timer.mTime;
+						timer.run();
+					}
+				}
+				else
+				{
+					foundNull = true;
+				}
+			}
+
+			if (foundNull)
+			{
+				Timer.sRunningTimers = Timer.sRunningTimers.filter(function(val)
+				{
+					return val != null;
+				});
+			}
+		}
+
+		#if (haxe_ver >= 4.2)
+		#if target.threaded
+		sys.thread.Thread.current().events.progress();
+		#else
+		// Duplicate code required because Haxe 3 can't handle
+		// #if (haxe_ver >= 4.2 && target.threaded)
+		@:privateAccess haxe.EntryPoint.processEvents();
+		#end
+		#else
+		@:privateAccess haxe.EntryPoint.processEvents();
+		#end
+		#end
+	}
 }
 
 @:keep /*private*/ class ApplicationEventInfo
 {
-	public var deltaTime:Float;
+	public var deltaTime:Int;
 	public var type:ApplicationEventType;
 
-	public function new(type:ApplicationEventType = null, deltaTime:Float = 0.0)
+	public function new(type:ApplicationEventType = null, deltaTime:Int = 0)
 	{
 		this.type = type;
 		this.deltaTime = deltaTime;
@@ -632,36 +688,24 @@ class NativeApplication
 
 @:keep /*private*/ class DropEventInfo
 {
-	public var data:#if hl hl.Bytes #else String #end;
-	public var source:#if hl hl.Bytes #else String #end;
-	public var windowID:Int;
-	public var x:Float;
-	public var y:Float;
+	public var file:#if hl hl.Bytes #else String #end;
 	public var type:DropEventType;
 
-	public function new(type:DropEventType = null, data = null, source = null, windowID:Int = 0, x:Float = 0, y:Float = 0)
+	public function new(type:DropEventType = null, file = null)
 	{
 		this.type = type;
-		this.data = data;
-		this.source = source;
-		this.windowID = 0;
-		this.x = x;
-		this.y = y;
+		this.file = file;
 	}
 
 	public function clone():DropEventInfo
 	{
-		return new DropEventInfo(type, data, source, windowID, x, y);
+		return new DropEventInfo(type, file);
 	}
 }
 
 #if (haxe_ver >= 4.0) private enum #else @:enum private #end abstract DropEventType(Int)
 {
 	var DROP_FILE = 0;
-	var DROP_TEXT = 1;
-	var DROP_BEGIN = 2;
-	var DROP_COMPLETE = 3;
-	var DROP_POSITION = 4;
 }
 
 @:keep /*private*/ class GamepadEventInfo
@@ -671,9 +715,11 @@ class NativeApplication
 	public var id:Int;
 	public var type:GamepadEventType;
 	public var axisValue:Float;
-	public var timestamp:Float;
 
-	public function new(type:GamepadEventType = null, id:Int = 0, button:Int = 0, axis:Int = 0, value:Float = 0, timestamp:Float = 0)
+	// TODO: This should probably be an Int64
+	public var timestamp:Int = 0;
+
+	public function new(type:GamepadEventType = null, id:Int = 0, button:Int = 0, axis:Int = 0, value:Float = 0, timestamp:Int = 0)
 	{
 		this.type = type;
 		this.id = id;
@@ -739,9 +785,11 @@ class NativeApplication
 	public var modifier:Int;
 	public var type:KeyEventType;
 	public var windowID:Int;
-	public var timestamp:Float;
 
-	public function new(type:KeyEventType = null, windowID:Int = 0, keyCode: Float = 0, modifier:Int = 0, timestamp:Float = 0)
+	// TODO: This should probably be an Int64
+	public var timestamp:Int = 0;
+
+	public function new(type:KeyEventType = null, windowID:Int = 0, keyCode: Float = 0, modifier:Int = 0, timestamp:Int = 0)
 	{
 		this.type = type;
 		this.windowID = windowID;

@@ -1,5 +1,5 @@
 #include <system/Mutex.h>
-#include <SDL3/SDL.h>
+#include <SDL.h>
 
 
 namespace lime {
@@ -16,7 +16,7 @@ namespace lime {
 
 		if (mutex) {
 
-			SDL_DestroyMutex ((SDL_Mutex*)mutex);
+			SDL_DestroyMutex ((SDL_mutex*)mutex);
 
 		}
 
@@ -27,8 +27,8 @@ namespace lime {
 
 		if (mutex) {
 
-			SDL_LockMutex ((SDL_Mutex*)mutex);
-			return true;
+			return SDL_LockMutex ((SDL_mutex*)mutex) == 0;
+
 		}
 
 		return false;
@@ -40,7 +40,7 @@ namespace lime {
 
 		if (mutex) {
 
-			return SDL_TryLockMutex ((SDL_Mutex*)mutex);
+			return SDL_TryLockMutex ((SDL_mutex*)mutex) == 0;
 
 		}
 
@@ -53,8 +53,8 @@ namespace lime {
 
 		if (mutex) {
 
-			SDL_UnlockMutex ((SDL_Mutex*)mutex);
-			return true;
+			return SDL_UnlockMutex ((SDL_mutex*)mutex) == 0;
+
 		}
 
 		return false;

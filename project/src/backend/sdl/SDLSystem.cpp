@@ -35,7 +35,7 @@
 #include <android/asset_manager_jni.h>
 #endif
 
-#include <SDL3/SDL.h>
+#include <SDL.h>
 #include <string>
 
 #ifdef HX_WINDOWS
@@ -59,24 +59,9 @@ namespace lime {
 	static bool init = false;
 
 
-	std::wstring* Clipboard::GetText () {
+	const char* Clipboard::GetText () {
 
-		std::wstring* result = 0;
-		System::GCEnterBlocking ();
-
-		char* text = (char*)SDL_GetClipboardText ();
-
-		#ifdef HX_WINDOWS
-		std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-		result = new std::wstring (converter.from_bytes(text));
-		#else
-		result = new std::wstring (text, text + strlen (text));
-		#endif
-
-		SDL_free (text);
-
-		System::GCExitBlocking ();
-		return result;
+		return SDL_GetClipboardText ();
 
 	}
 
@@ -90,7 +75,7 @@ namespace lime {
 
 	bool Clipboard::SetText (const char* text) {
 
-		return (SDL_SetClipboardText (text));
+		return (SDL_SetClipboardText (text) == 0);
 
 	}
 
@@ -98,7 +83,7 @@ namespace lime {
 	void *JNI::GetEnv () {
 
 		#ifdef ANDROID
-		return SDL_GetAndroidJNIEnv ();
+		return SDL_AndroidGetJNIEnv ();
 		#else
 		return 0;
 		#endif
@@ -106,9 +91,16 @@ namespace lime {
 	}
 
 
+	int System::GetTicks () {
+
+		return SDL_GetTicks ();
+
+	}
+
+
 	bool System::GetAllowScreenTimeout () {
 
-		return SDL_ScreenSaverEnabled ();
+		return SDL_IsScreenSaverEnabled ();
 
 	}
 
@@ -122,7 +114,7 @@ namespace lime {
 
 			case APPLICATION: {
 
-				char* path = (char*)SDL_GetBasePath ();
+				char* path = SDL_GetBasePath ();
 				#ifdef HX_WINDOWS
 				std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
 				result = new std::wstring (converter.from_bytes(path));
@@ -312,9 +304,6 @@ namespace lime {
 
 	void* System::GetDisplay (bool useCFFIValue, int id) {
 
-		if (id == 0)
-			id = SDL_GetPrimaryDisplay();
-
 		if (useCFFIValue) {
 
 			if (!init) {
@@ -332,51 +321,35 @@ namespace lime {
 
 			}
 
-			const char* displayName = SDL_GetDisplayName (id);
-			if (displayName == NULL) {
+			int numDisplays = GetNumDisplays ();
+
+			if (id < 0 || id >= numDisplays) {
 
 				return alloc_null ();
 
 			}
 
 			value display = alloc_empty_object ();
-			alloc_field (display, id_name, alloc_string (displayName));
+			alloc_field (display, id_name, alloc_string (SDL_GetDisplayName (id)));
 
 			SDL_Rect bounds = { 0, 0, 0, 0 };
 			SDL_GetDisplayBounds (id, &bounds);
 			alloc_field (display, id_bounds, Rectangle (bounds.x, bounds.y, bounds.w, bounds.h).Value ());
 
-			const SDL_DisplayMode *displayMode = SDL_GetDesktopDisplayMode (id);
-
-			float dpi = 72.0f;
-
+			float dpi = 72.0;
 			#ifndef EMSCRIPTEN
-
-			float pixelDensity = displayMode ? displayMode->pixel_density : 1.0f;
-
-			float contentScale = SDL_GetDisplayContentScale (id);
-
-			if (contentScale == 0.0f) {
-
-				contentScale = 1.0f;
-
-			}
-
-			#if defined (ANDROID) || defined (__IPHONEOS__)
-			dpi = pixelDensity * contentScale * 160.0f;
-			#else
-			dpi = pixelDensity * contentScale * 96.0f;
+			SDL_GetDisplayDPI (id, &dpi, NULL, NULL);
 			#endif
-
-			#endif
-
 			alloc_field (display, id_dpi, alloc_float (dpi));
 
+			SDL_DisplayMode displayMode = { SDL_PIXELFORMAT_UNKNOWN, 0, 0, 0, 0 };
 			DisplayMode mode;
 
-			mode.height = displayMode->h;
+			SDL_GetDesktopDisplayMode (id, &displayMode);
 
-			switch (displayMode->format) {
+			mode.height = displayMode.h;
+
+			switch (displayMode.format) {
 
 				case SDL_PIXELFORMAT_ARGB8888:
 
@@ -395,22 +368,21 @@ namespace lime {
 
 			}
 
-			mode.refreshRate = displayMode->refresh_rate;
-			mode.width = displayMode->w;
+			mode.refreshRate = displayMode.refresh_rate;
+			mode.width = displayMode.w;
 
 			alloc_field (display, id_currentMode, (value)mode.Value ());
 
-			int numDisplayModes;
-			SDL_DisplayMode **displayModes = SDL_GetFullscreenDisplayModes (id, &numDisplayModes);
+			int numDisplayModes = SDL_GetNumDisplayModes (id);
 			value supportedModes = alloc_array (numDisplayModes);
 
 			for (int i = 0; i < numDisplayModes; i++) {
 
-				const SDL_DisplayMode *sdlDisplayMode = displayModes[i];
+				SDL_GetDisplayMode (id, i, &displayMode);
 
-				mode.height = sdlDisplayMode->h;
+				mode.height = displayMode.h;
 
-				switch (sdlDisplayMode->format) {
+				switch (displayMode.format) {
 
 					case SDL_PIXELFORMAT_ARGB8888:
 
@@ -429,8 +401,8 @@ namespace lime {
 
 				}
 
-				mode.refreshRate = sdlDisplayMode->refresh_rate;
-				mode.width = sdlDisplayMode->w;
+				mode.refreshRate = displayMode.refresh_rate;
+				mode.width = displayMode.w;
 
 				val_array_set_i (supportedModes, i, (value)mode.Value ());
 
@@ -446,17 +418,16 @@ namespace lime {
 			const int id_dpi = hl_hash_utf8 ("dpi");
 			const int id_height = hl_hash_utf8 ("height");
 			const int id_name = hl_hash_utf8 ("name");
-			const int id_orientation = hl_hash_utf8 ("orientation");
 			const int id_pixelFormat = hl_hash_utf8 ("pixelFormat");
 			const int id_refreshRate = hl_hash_utf8 ("refreshRate");
 			const int id_supportedModes = hl_hash_utf8 ("supportedModes");
 			const int id_width = hl_hash_utf8 ("width");
-			const int id_safeArea = hl_hash_utf8 ("safeArea");
 			const int id_x = hl_hash_utf8 ("x");
 			const int id_y = hl_hash_utf8 ("y");
 
-			const char* displayName = SDL_GetDisplayName (id);
-			if (displayName == NULL) {
+			int numDisplays = GetNumDisplays ();
+
+			if (id < 0 || id >= numDisplays) {
 
 				return 0;
 
@@ -464,6 +435,7 @@ namespace lime {
 
 			vdynamic* display = (vdynamic*)hl_alloc_dynobj ();
 
+			const char* displayName = SDL_GetDisplayName (id);
 			char* _displayName = (char*)malloc(strlen(displayName) + 1);
 			strcpy (_displayName, displayName);
 			hl_dyn_setp (display, id_name, &hlt_bytes, _displayName);
@@ -479,37 +451,20 @@ namespace lime {
 
 			hl_dyn_setp (display, id_bounds, &hlt_dynobj, _bounds);
 
-			const SDL_DisplayMode *displayMode = SDL_GetDesktopDisplayMode (id);
-
-			float dpi = 72.0f;
-
+			float dpi = 72.0;
 			#ifndef EMSCRIPTEN
-
-			float pixelDensity = displayMode ? displayMode->pixel_density : 1.0f;
-
-			float contentScale = SDL_GetDisplayContentScale (id);
-
-			if (contentScale == 0.0f) {
-
-				contentScale = 1.0f;
-
-			}
-
-			#if defined (ANDROID) || defined (__IPHONEOS__)
-			dpi = pixelDensity * contentScale * 160.0f;
-			#else
-			dpi = pixelDensity * contentScale * 96.0f;
+			SDL_GetDisplayDPI (id, &dpi, NULL, NULL);
 			#endif
-
-			#endif
-
 			hl_dyn_setf (display, id_dpi, dpi);
 
+			SDL_DisplayMode displayMode = { SDL_PIXELFORMAT_UNKNOWN, 0, 0, 0, 0 };
 			DisplayMode mode;
 
-			mode.height = displayMode->h;
+			SDL_GetDesktopDisplayMode (id, &displayMode);
 
-			switch (displayMode->format) {
+			mode.height = displayMode.h;
+
+			switch (displayMode.format) {
 
 				case SDL_PIXELFORMAT_ARGB8888:
 
@@ -528,8 +483,8 @@ namespace lime {
 
 			}
 
-			mode.refreshRate = displayMode->refresh_rate;
-			mode.width = displayMode->w;
+			mode.refreshRate = displayMode.refresh_rate;
+			mode.width = displayMode.w;
 
 			vdynamic* _displayMode = (vdynamic*)hl_alloc_dynobj ();
 			hl_dyn_seti (_displayMode, id_height, &hlt_i32, mode.height);
@@ -538,19 +493,18 @@ namespace lime {
 			hl_dyn_seti (_displayMode, id_width, &hlt_i32, mode.width);
 			hl_dyn_setp (display, id_currentMode, &hlt_dynobj, _displayMode);
 
-			int numDisplayModes;
-			SDL_DisplayMode **displayModes = SDL_GetFullscreenDisplayModes (id, &numDisplayModes);
+			int numDisplayModes = SDL_GetNumDisplayModes (id);
 
 			hl_varray* supportedModes = (hl_varray*)hl_alloc_array (&hlt_dynobj, numDisplayModes);
 			vdynamic** supportedModesData = hl_aptr (supportedModes, vdynamic*);
 
 			for (int i = 0; i < numDisplayModes; i++) {
 
-				const SDL_DisplayMode *sdlDisplayMode = displayModes[i];
+				SDL_GetDisplayMode (id, i, &displayMode);
 
-				mode.height = sdlDisplayMode->h;
+				mode.height = displayMode.h;
 
-				switch (sdlDisplayMode->format) {
+				switch (displayMode.format) {
 
 					case SDL_PIXELFORMAT_ARGB8888:
 
@@ -569,8 +523,8 @@ namespace lime {
 
 				}
 
-				mode.refreshRate = sdlDisplayMode->refresh_rate;
-				mode.width = sdlDisplayMode->w;
+				mode.refreshRate = displayMode.refresh_rate;
+				mode.width = displayMode.w;
 
 				vdynamic* _displayMode = (vdynamic*)hl_alloc_dynobj ();
 				hl_dyn_seti (_displayMode, id_height, &hlt_i32, mode.height);
@@ -590,69 +544,55 @@ namespace lime {
 	}
 
 
+	#if defined(ANDROID) || defined (IPHONE)
 	int System::GetFirstGyroscopeSensorId () {
 
-		int count = 0;
+		int numSensors = SDL_NumSensors ();
 
-		SDL_SensorID *sensors = SDL_GetSensors (&count);
+		for (int i = 0; i < numSensors; i++) {
 
-		if (!sensors)
-			return -1;
+			if (SDL_SensorGetDeviceType (i) == SDL_SENSOR_GYRO) {
 
-		for (int i = 0; i < count; i++)
-		{
-			if (SDL_GetSensorTypeForID (sensors[i]) == SDL_SENSOR_GYRO) {
-
-				SDL_free (sensors);
-				return sensors[i];
+				return SDL_SensorGetDeviceInstanceID(i);
 
 			}
 
 		}
 
-		SDL_free (sensors);
 		return -1;
 
 	}
 
 	int System::GetFirstAccelerometerSensorId () {
 
-		int count = 0;
+		int numSensors = SDL_NumSensors ();
 
-		SDL_SensorID *sensors = SDL_GetSensors(&count);
+		for (int i = 0; i < numSensors; i++) {
 
-		if (!sensors)
-			return -1;
+			if (SDL_SensorGetDeviceType (i) == SDL_SENSOR_ACCEL) {
 
-		for (int i = 0; i < count; i++) {
-
-			if (SDL_GetSensorTypeForID(sensors[i]) == SDL_SENSOR_ACCEL) {
-
-				SDL_free(sensors);
-				return sensors[i];
+				return SDL_SensorGetDeviceInstanceID(i);
 
 			}
 
 		}
 
-		SDL_free (sensors);
 		return -1;
 
 	}
+	#endif
 
 
 	int System::GetNumDisplays () {
-		int numDisplays;
-		SDL_DisplayID * displays = SDL_GetDisplays(&numDisplays);
-		SDL_free(displays);
-		return numDisplays;
+
+		return SDL_GetNumVideoDisplays ();
 
 	}
 
 
 	double System::GetTimer () {
 
-		return SDL_GetTicksNS ();
+		return SDL_GetTicks ();
 
 	}
 
@@ -676,7 +616,7 @@ namespace lime {
 
 	int System::GetDisplayOrientation(int displayIndex) {
 		int orientation = 0;
-		switch(SDL_GetCurrentDisplayOrientation(displayIndex)) {
+		switch(SDL_GetDisplayOrientation(displayIndex)) {
 			case SDL_ORIENTATION_UNKNOWN:
 				orientation = 0;
 				break;
@@ -698,47 +638,27 @@ namespace lime {
 	}
 
 	std::wstring* System::GetHint (const char* key) {
+		std::string hintKey(key);
 
-		std::string hintKey (key);
-
-		if (hintKey.rfind ("SDL_", 0) != 0) {
-
+    if (hintKey.rfind("SDL_", 0) != 0) {
 			hintKey = "SDL_" + hintKey;
+    }
 
-		}
+    SDL_GetHint(hintKey.c_str());
 
-		SDL_GetHint (hintKey.c_str ());
-
-		const char* raw = SDL_GetHint (hintKey.c_str ());
-
+		const char* raw = SDL_GetHint(hintKey.c_str());
 		if (!raw) {
-
 			return nullptr;
-
 		}
 
 		std::string hint = std::string (raw);
 		std::wstring* _hint = new std::wstring (hint.begin (), hint.end ());
 		return _hint;
-
 	}
 
 
-	void System::SetHint (const char* key, const char* value) {
 
-		std::string hintKey (key);
-
-		if (hintKey.rfind ("SDL_", 0) != 0) {
-
-			hintKey = "SDL_" + hintKey;
-
-		}
-
-		SDL_SetHint (hintKey.c_str (), value);
-
-	}
-
-
+	#if !defined(IPHONE)
 	void System::OpenFile (const char* path) {
 
 		OpenURL (path, NULL);
@@ -751,30 +671,39 @@ namespace lime {
 		SDL_OpenURL (url);
 
 	}
+	#endif
 
 
 	FILE* FILE_HANDLE::getFile () {
 
 		#ifndef HX_WINDOWS
 
-		SDL_PropertiesID properties = SDL_GetIOProperties((SDL_IOStream*)handle);
+		switch (((SDL_RWops*)handle)->type) {
 
-		FILE* filePointer = (FILE*)SDL_GetPointerProperty(properties, SDL_PROP_IOSTREAM_STDIO_FILE_POINTER, NULL);
+			case SDL_RWOPS_STDFILE:
+			{
+				#ifdef HAVE_STDIO_H
+				return ((SDL_RWops*)handle)->hidden.stdio.fp;
+				#else
+				#error Lime requires HAVE_STDIO_H
+				#endif
+			}
+			case SDL_RWOPS_JNIFILE:
+			{
+				#ifdef ANDROID
+				System::GCEnterBlocking ();
+				int fd;
+				off_t outStart;
+				off_t outLength;
+				fd = AAsset_openFileDescriptor ((AAsset*)(((SDL_RWops*)handle)->hidden.androidio.asset), &outStart, &outLength);
+				FILE* file = ::fdopen (fd, "rb");
+				::fseek (file, outStart, 0);
+				System::GCExitBlocking ();
+				return file;
+				#endif
+			}
 
-		if(filePointer != NULL)
-			return filePointer;
-
-		#ifdef ANDROID
-			System::GCEnterBlocking ();
-			int fd;
-			off_t outStart;
-			off_t outLength;
-			fd = AAsset_openFileDescriptor ((AAsset*)SDL_GetPointerProperty(properties, SDL_PROP_IOSTREAM_ANDROID_AASSET_POINTER, NULL), &outStart, &outLength);
-			FILE* file = ::fdopen (fd, "rb");
-			::fseek (file, outStart, 0);
-			System::GCExitBlocking ();
-			return file;
-		#endif
+		}
 
 		return NULL;
 
@@ -783,6 +712,7 @@ namespace lime {
 		return (FILE*)handle;
 
 		#endif
+
 	}
 
 
@@ -791,7 +721,7 @@ namespace lime {
 		#ifndef HX_WINDOWS
 
 		System::GCEnterBlocking ();
-		int size = SDL_GetIOSize (((SDL_IOStream*)handle));
+		int size = SDL_RWsize (((SDL_RWops*)handle));
 		System::GCExitBlocking ();
 		return size;
 
@@ -806,7 +736,15 @@ namespace lime {
 
 	bool FILE_HANDLE::isFile () {
 
+		#ifndef HX_WINDOWS
+
+		return ((SDL_RWops*)handle)->type == SDL_RWOPS_STDFILE;
+
+		#else
+
 		return true;
+
+		#endif
 
 	}
 
@@ -818,7 +756,7 @@ namespace lime {
 		if (stream) {
 
 			System::GCEnterBlocking ();
-			int code = SDL_CloseIO ((SDL_IOStream*)stream->handle);
+			int code = SDL_RWclose ((SDL_RWops*)stream->handle);
 			delete stream;
 			System::GCExitBlocking ();
 			return code;
@@ -846,33 +784,84 @@ namespace lime {
 	}
 
 
-	FILE_HANDLE *fopen (const char *filename, const char *mode) {
+	FILE_HANDLE *fdopen (int fd, const char *mode) {
 
 		#ifndef HX_WINDOWS
 
 		System::GCEnterBlocking ();
+		FILE* fp = ::fdopen (fd, mode);
+		SDL_RWops *result = SDL_RWFromFP (fp, SDL_TRUE);
+		System::GCExitBlocking ();
 
-		SDL_IOStream *result = SDL_IOFromFile (filename, mode);
+		if (result) {
+
+			return new FILE_HANDLE (result);
+
+		}
+
+		return NULL;
+
+		#else
+
+		FILE* result;
+
+		System::GCEnterBlocking ();
+		result = ::fdopen (fd, mode);
+		System::GCExitBlocking ();
+
+		if (result) {
+
+			return new FILE_HANDLE (result);
+
+		}
+
+		return NULL;
+
+		#endif
+
+	}
+
+
+	FILE_HANDLE *fopen (const char *filename, const char *mode) {
+
+		#ifndef HX_WINDOWS
+
+		SDL_RWops *result;
+
+		System::GCEnterBlocking ();
+
+		#ifdef HX_MACOS
+
+		result = SDL_RWFromFile (filename, "rb");
 
 		if (!result) {
 
-			const char *base = SDL_GetBasePath ();
+			CFStringRef str = CFStringCreateWithCString (NULL, filename, kCFStringEncodingUTF8);
+			CFURLRef path = CFBundleCopyResourceURL (CFBundleGetMainBundle (), str, NULL, NULL);
+			CFRelease (str);
 
-			if (base) {
+			if (path) {
 
-				char *fullpath;
+				str = CFURLCopyPath (path);
+				CFIndex maxSize = CFStringGetMaximumSizeForEncoding (CFStringGetLength (str), kCFStringEncodingUTF8);
+				char *buffer = (char *)malloc (maxSize);
 
-				if (SDL_asprintf (&fullpath, "%s%s", base, filename) >= 0) {
+				if (CFStringGetCString (str, buffer, maxSize, kCFStringEncodingUTF8)) {
 
-					result = SDL_IOFromFile (fullpath, mode);
-
-					SDL_free (fullpath);
+					result = SDL_RWFromFP (::fopen (buffer, "rb"), SDL_TRUE);
+					free (buffer);
 
 				}
+
+				CFRelease (str);
+				CFRelease (path);
 
 			}
 
 		}
+		#else
+		result = SDL_RWFromFile (filename, mode);
+		#endif
 
 		System::GCExitBlocking ();
 
@@ -886,14 +875,13 @@ namespace lime {
 
 		#else
 
+		FILE* result;
 		std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
 		std::wstring* wfilename = new std::wstring (converter.from_bytes (filename));
 		std::wstring* wmode = new std::wstring (converter.from_bytes (mode));
 
 		System::GCEnterBlocking ();
-
-		FILE* result = ::_wfopen (wfilename->c_str(), wmode->c_str());
-
+		result = ::_wfopen (wfilename->c_str(), wmode->c_str());
 		System::GCExitBlocking ();
 
 		delete wfilename;
@@ -919,10 +907,7 @@ namespace lime {
 
 		#ifndef HX_WINDOWS
 
-        if(size > 0 && count > 0)
-	  	    nmem = SDL_ReadIO (stream ? (SDL_IOStream*)stream->handle : NULL, ptr, size * count) / size;
-        else
-		    nmem = 0;
+		nmem = SDL_RWread (stream ? (SDL_RWops*)stream->handle : NULL, ptr, size, count);
 
 		#else
 
@@ -943,7 +928,7 @@ namespace lime {
 
 		#ifndef HX_WINDOWS
 
-		success = SDL_SeekIO (stream ? (SDL_IOStream*)stream->handle : NULL, offset, (SDL_IOWhence)origin);
+		success = SDL_RWseek (stream ? (SDL_RWops*)stream->handle : NULL, offset, origin);
 
 		#else
 
@@ -964,7 +949,7 @@ namespace lime {
 
 		#ifndef HX_WINDOWS
 
-		pos = SDL_TellIO (stream ? (SDL_IOStream*)stream->handle : NULL);
+		pos = SDL_RWtell (stream ? (SDL_RWops*)stream->handle : NULL);
 
 		#else
 
@@ -985,10 +970,7 @@ namespace lime {
 
 		#ifndef HX_WINDOWS
 
-  		if(size > 0 && count > 0)
-            nmem = SDL_WriteIO (stream ? (SDL_IOStream*)stream->handle : NULL, ptr, size * count) / size;
-        else
-		    nmem = 0;
+		nmem = SDL_RWwrite (stream ? (SDL_RWops*)stream->handle : NULL, ptr, size, count);
 
 		#else
 

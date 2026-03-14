@@ -32,12 +32,12 @@ class Window
 	public var borderless(get, set):Bool;
 	public var context(default, null):RenderContext;
 	public var cursor(get, set):MouseCursor;
-	public var display(get, never):Display;
+	public var display(get, null):Display;
 	public var displayMode(get, set):DisplayMode;
 	#if (!lime_doc_gen || (js && html5))
 	public var element(default, null):#if (js && html5) Element #else Dynamic #end;
 	#end
-	public var nativeHandle(get, never):Dynamic;
+	public var nativeHandle(get, null):Dynamic;
 
 	/**
 	 * The current frame rate (measured in frames-per-second) of the window.
@@ -49,7 +49,7 @@ class Window
 
 	public var fullscreen(get, set):Bool;
 	public var height(get, set):Int;
-	public var hidden(get, never):Bool;
+	public var hidden(get, null):Bool;
 	public var id(default, null):Int;
 	public var maxHeight(get, set):Int;
 	public var maximized(get, set):Bool;
@@ -61,11 +61,7 @@ class Window
 	public var onActivate(default, null) = new Event<Void->Void>();
 	public var onClose(default, null) = new Event<Void->Void>();
 	public var onDeactivate(default, null) = new Event<Void->Void>();
-	public var onDropFile(default, null) = new Event<String->String->Float->Float->Void>();
-	public var onDropText(default, null) = new Event<String->String->Float->Float->Void>();
-	public var onDropBegin(default, null) = new Event<Void->Void>();
-	public var onDropComplete(default, null) = new Event<Float->Float->Void>();
-	public var onDropPosition(default, null) = new Event<Float->Float->Void>();
+	public var onDropFile(default, null) = new Event<String->Void>();
 	public var onEnter(default, null) = new Event<Void->Void>();
 	public var onExpose(default, null) = new Event<Void->Void>();
 	public var onFocusIn(default, null) = new Event<Void->Void>();
@@ -96,7 +92,7 @@ class Window
 	public var opacity(get, set):Float;
 	public var parameters:Dynamic;
 	public var resizable(get, set):Bool;
-	public var scale(get, never):Float;
+	public var scale(get, null):Float;
 	#if (!lime_doc_gen || flash || openfl)
 	public var stage(default, null):Stage;
 	#end
@@ -387,9 +383,9 @@ class Window
 		#end
 	}
 
-	public function alert(?type:MessageBoxType = INFORMATION, message:String = null, title:String = null, buttons:Array<String> = null):Int
+	public function alert(message:String = null, title:String = null):Void
 	{
-		return __backend.alert(type, message, title, buttons);
+		__backend.alert(message, title);
 	}
 
 	public function close():Void
@@ -406,7 +402,7 @@ class Window
 	 * Sets the swap interval for the current window.
 	 * @return `false` if the swap interval could not be set
 	**/
-	public function setVSyncMode(mode:lime.ui.WindowVSyncMode):Bool
+	public function setVSyncMode(mode:WindowVSyncMode):Bool
 	{
 		return __backend.setVSyncMode(mode);
 	}

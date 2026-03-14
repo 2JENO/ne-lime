@@ -11,11 +11,7 @@ namespace lime {
 
 	enum DropEventType {
 
-		DROP_FILE,
-		DROP_TEXT,
-		DROP_BEGIN,
-		DROP_COMPLETE,
-		DROP_POSITION
+		DROP_FILE
 
 	};
 
@@ -23,11 +19,7 @@ namespace lime {
 	struct DropEvent {
 
 		hl_type* t;
-		vbyte* data;
-		vbyte* source;
-		int windowID;
-		double x;
-		double y;
+		vbyte* file;
 		DropEventType type;
 
 		static ValuePointer* callback;

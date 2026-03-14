@@ -78,7 +78,6 @@ class WindowsPlatform extends PlatformTarget
 				hardware: true,
 				display: 0,
 				resizable: true,
-				transparent: false,
 				borderless: false,
 				orientation: Orientation.AUTO,
 				vsync: false,

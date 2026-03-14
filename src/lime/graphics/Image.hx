@@ -146,7 +146,7 @@ class Image
 	/**
 		The offset, width and height of this image as a `Rectangle`
 	**/
-	public var rect(get, never):Rectangle;
+	public var rect(get, null):Rectangle;
 
 	/**
 		A higher-level representation of the source `ImageBuffer`. This might be an

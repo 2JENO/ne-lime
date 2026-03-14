@@ -218,8 +218,6 @@ class HTML5Window
 
 			element.addEventListener("contextmenu", handleContextMenuEvent, true);
 
-			element.addEventListener("dragenter", handleDragEvent, true);
-			element.addEventListener("dragleave", handleDragEvent, true);
 			element.addEventListener("dragstart", handleDragEvent, true);
 			element.addEventListener("dragover", handleDragEvent, true);
 			element.addEventListener("drop", handleDragEvent, true);
@@ -242,15 +240,12 @@ class HTML5Window
 		}
 	}
 
-	public function alert(type:lime.ui.MessageBoxType, message:String, title:String, buttons:Array<String>):Int
+	public function alert(message:String, title:String):Void
 	{
 		if (message != null)
 		{
 			Browser.alert(message);
-			return 0;
 		}
-
-		return -1;
 	}
 
 	public function close():Void
@@ -495,58 +490,39 @@ class HTML5Window
 	private function handleCutOrCopyEvent(event:ClipboardEvent):Void
 	{
 		var text = Clipboard.text;
-		if (text == null)
-		{
+		if (text == null) {
 			text = "";
 		}
 		event.clipboardData.setData("text/plain", text);
 		if (event.cancelable) event.preventDefault();
 	}
 
-	private function handleDragEvent(event:DragEvent):Void
+	private function handleDragEvent(event:DragEvent):Bool
 	{
-		if (event.cancelable)
-		{
-			event.preventDefault();
-		}
-
 		switch (event.type)
 		{
-			case "dragenter":
-				parent.onDropBegin.dispatch();
-			case "dragleave":
-				parent.onDropComplete.dispatch(event.clientX, event.clientY);
-			case "dragover":
-				parent.onDropPosition.dispatch(event.clientX, event.clientY);
-			case "drop":
-				if (event.dataTransfer != null)
+			case "dragstart":
+				if (cast(event.target, Element).nodeName.toLowerCase() == "img" && event.cancelable)
 				{
-					// TODO: Create a formal API that supports HTML5 file objects
-					if (event.dataTransfer.files != null && event.dataTransfer.files.length > 0)
-					{
-						for (file in event.dataTransfer.files)
-						{
-							parent.onDropFile.dispatch(cast file, "html5", event.clientX, event.clientY);
-						}
-					}
-					else
-					{
-						var text = event.dataTransfer.getData("text/plain");
-
-						if (text == null || text == "")
-						{
-							text = event.dataTransfer.getData("text/uri-list");
-						}
-
-						if (text != null && text != "")
-						{
-							parent.onDropText.dispatch(text, "html5", event.clientX, event.clientY);
-						}
-					}
+					event.preventDefault();
+					return false;
 				}
 
-				parent.onDropComplete.dispatch(event.clientX, event.clientY);
+			case "dragover":
+				event.preventDefault();
+				return false;
+
+			case "drop":
+				// TODO: Create a formal API that supports HTML5 file objects
+				if (event.dataTransfer != null && event.dataTransfer.files.length > 0)
+				{
+					parent.onDropFile.dispatch(cast event.dataTransfer.files);
+					event.preventDefault();
+					return false;
+				}
 		}
+
+		return true;
 	}
 
 	private function handleFocusEvent(event:FocusEvent):Void
@@ -1273,6 +1249,7 @@ class HTML5Window
 				textInput.removeEventListener('paste', handlePasteEvent, true);
 				textInput.removeEventListener('compositionstart', handleCompositionstartEvent, true);
 				textInput.removeEventListener('compositionend', handleCompositionendEvent, true);
+
 			}
 		}
 

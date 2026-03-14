@@ -142,10 +142,7 @@ namespace lime {
 			if (file->isFile ()) {
 
 				png_init_io (png_ptr, file->getFile ());
-
-				#ifndef ANDROID
 				png_set_sig_bytes (png_ptr, PNG_SIG_SIZE);
-				#endif
 
 			} else {
 

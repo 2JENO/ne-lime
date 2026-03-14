@@ -2,7 +2,7 @@
 #define LIME_SDL_CURSOR_H
 
 
-#include <SDL3/SDL.h>
+#include <SDL.h>
 
 
 namespace lime {
