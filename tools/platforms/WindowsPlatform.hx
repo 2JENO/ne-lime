@@ -146,19 +146,6 @@ class WindowsPlatform extends PlatformTarget
 		{
 			targetType = "hl";
 			is64 = !project.flags.exists("32") && !project.flags.exists("x86_32");
-			var hlVer = project.haxedefs.get("hl-ver");
-			if (hlVer == null)
-			{
-				var hlPath = project.defines.get("HL_PATH");
-				if (hlPath == null)
-				{
-					// Haxe's default target version for HashLink may be
-					// different (newer even) than the build of HashLink that
-					// is bundled with Lime. if using Lime's bundled HashLink,
-					// set hl-ver to the correct version
-					project.haxedefs.set("hl-ver", HashlinkHelper.BUNDLED_HL_VER);
-				}
-			}
 		}
 		else if (project.targetFlags.exists("cppia"))
 		{
@@ -396,7 +383,7 @@ class WindowsPlatform extends PlatformTarget
 						var visualStudioPath = StringTools.trim(vswhereOutput);
 						var vcvarsallPath = visualStudioPath + "\\VC\\Auxiliary\\Build\\vcvarsall.bat";
 						// this command sets up the environment variables and things that visual studio requires
-						var vcvarsallCommand = [vcvarsallPath, "x64"].map(arg -> ~/([&|\(\)<>\^ ])/g.replace(arg, "^$1"));
+						var vcvarsallCommand = [vcvarsallPath, "x64"].map(function(arg:String):String { return ~/([&|\(\)<>\^ ])/g.replace(arg, "^$1"); });
 						// this command runs the cl.exe c compiler from visual studio
 						var clCommand = ["cl.exe", "/Ox", "/Fe:" + executablePath, "-I", Path.combine(targetDirectory, "obj"), Path.combine(targetDirectory, "obj/ApplicationMain.c")];
 						for (file in System.readDirectory(applicationDirectory))
@@ -411,7 +398,7 @@ class WindowsPlatform extends PlatformTarget
 						}
 						clCommand.push("/link");
 						clCommand.push("/subsystem:windows");
-						clCommand = clCommand.map(arg -> ~/([&|\(\)<>\^ ])/g.replace(arg, "^$1"));
+						clCommand = clCommand.map(function(arg:String):String { return ~/([&|\(\)<>\^ ])/g.replace(arg, "^$1"); });
 						// combine both commands into one
 						command = ["cmd.exe", "/s", "/c", vcvarsallCommand.join(" ") + " && " + clCommand.join(" ")];
 					}
@@ -562,8 +549,8 @@ class WindowsPlatform extends PlatformTarget
 			}
 			else
 			{
-				var haxeArgs = [hxml, "-D", "resourceFile=ApplicationMain.rc"];
-				var flags = ["-DresourceFile=ApplicationMain.rc"];
+				var haxeArgs = [hxml];
+				var flags = [];
 
 				if (is64)
 				{
@@ -588,8 +575,6 @@ class WindowsPlatform extends PlatformTarget
 					System.runCommand("", "haxe", haxeArgs);
 
 					if (noOutput) return;
-
-					IconHelper.createWindowsIcon(icons, Path.combine(targetDirectory + "/obj", "ApplicationMain.ico"));
 
 					CPPHelper.compile(project, targetDirectory + "/obj", flags);
 
@@ -619,13 +604,18 @@ class WindowsPlatform extends PlatformTarget
 
 					if (noOutput) return;
 
-					IconHelper.createWindowsIcon(icons, Path.combine(targetDirectory + "/obj", "ApplicationMain.ico"));
-
 					CPPHelper.compile(project, targetDirectory + "/obj", flags.concat(["-Dstatic_link"]));
-
 					CPPHelper.compile(project, targetDirectory + "/obj", flags, "BuildMain.xml");
 
 					System.copyFile(targetDirectory + "/obj/Main" + (project.debug ? "-debug" : "") + ".exe", executablePath);
+				}
+
+				var iconPath = Path.combine(applicationDirectory, "icon.ico");
+
+				if (IconHelper.createWindowsIcon(icons, iconPath) && System.hostPlatform == WINDOWS)
+				{
+					var templates = [Haxelib.getPath(new Haxelib(#if lime "lime" #else "hxp" #end)) + "/templates"].concat(project.templatePaths);
+					System.runCommand("", System.findTemplate(templates, "bin/ReplaceVistaIcon.exe"), [executablePath, iconPath, "1"], true, true);
 				}
 			}
 		}
@@ -689,29 +679,6 @@ class WindowsPlatform extends PlatformTarget
 		}
 		else
 		{
-			if (targetType == "cpp")
-			{
-				if (context.APP_DESCRIPTION == null || context.APP_DESCRIPTION == "")
-				{
-					context.APP_DESCRIPTION = project.meta.title;
-				}
-
-				if (context.APP_COPYRIGHT_YEARS == null || context.APP_COPYRIGHT_YEARS == "")
-				{
-					context.APP_COPYRIGHT_YEARS = Std.string(Date.now().getFullYear());
-				}
-
-				var versionParts = project.meta.version.split(".");
-
-				if (versionParts.length == 3)
-				{
-					versionParts.push("0");
-				}
-
-				context.FILE_VERSION = versionParts.join(".");
-				context.VERSION_NUMBER = versionParts.join(",");
-			}
-
 			context.NEKO_FILE = targetDirectory + "/obj/ApplicationMain.n";
 			context.NODE_FILE = targetDirectory + "/bin/ApplicationMain.js";
 			context.HL_FILE = targetDirectory + "/obj/ApplicationMain" + (project.defines.exists("hlc") ? ".c" : ".hl");
@@ -1015,14 +982,9 @@ class WindowsPlatform extends PlatformTarget
 			ProjectHelper.recursiveSmartCopyTemplate(project, "winrt/temp", targetDirectory + "/haxe/temp", context, false, true);
 			ProjectHelper.recursiveSmartCopyTemplate(project, "winrt/scripts", targetDirectory + "/scripts", context, true, true);
 		}
-		else if (targetType == "cpp")
+		else if (targetType == "cpp" && project.targetFlags.exists("static"))
 		{
-			ProjectHelper.recursiveSmartCopyTemplate(project, "windows/resource", targetDirectory + "/obj", context);
-
-			if (project.targetFlags.exists("static"))
-			{
-				ProjectHelper.recursiveSmartCopyTemplate(project, "cpp/static", targetDirectory + "/obj", context);
-			}
+			ProjectHelper.recursiveSmartCopyTemplate(project, "cpp/static", targetDirectory + "/obj", context);
 		}
 
 		/*if (IconHelper.createIcon (project.icons, 32, 32, Path.combine (applicationDirectory, "icon.png"))) {

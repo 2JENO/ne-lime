@@ -192,8 +192,7 @@ class TVOSPlatform extends PlatformTarget
 			if (!StringTools.endsWith(dependency.name, ".framework")
 				&& !StringTools.endsWith(dependency.name, ".tbd")
 				&& !StringTools.endsWith(dependency.path, ".framework")
-				&& !StringTools.endsWith(dependency.path, ".xcframework")
-				&& !StringTools.endsWith(dependency.path, ".bundle"))
+				&& !StringTools.endsWith(dependency.path, ".xcframework"))
 			{
 				if (dependency.path != "")
 				{
@@ -263,22 +262,7 @@ class TVOSPlatform extends PlatformTarget
 		context.IOS_COMPILER = project.config.getString("tvos.compiler", "clang");
 		context.CPP_BUILD_LIBRARY = project.config.getString("cpp.buildLibrary", "hxcpp");
 
-		var json = Json.parse(File.getContent(Haxelib.getPath(new Haxelib("hxcpp"), true) + "/haxelib.json"));
-
-		var version = Std.string(json.version);
-		var versionSplit = version.split(".");
-
-		while (versionSplit.length > 2)
-			versionSplit.pop();
-
-		if (Std.parseFloat(versionSplit.join(".")) > 3.1)
-		{
-			context.CPP_LIBPREFIX = "lib";
-		}
-		else
-		{
-			context.CPP_LIBPREFIX = "";
-		}
+		context.CPP_CACHE_WORKAROUND = "unset HXCPP_COMPILE_CACHE;";
 
 		context.IOS_LINKER_FLAGS = ["-stdlib=libc++"].concat(project.config.getArrayString("tvos.linker-flags"));
 		context.IOS_NON_EXEMPT_ENCRYPTION = project.config.getBool("tvos.non-exempt-encryption", true);
@@ -299,8 +283,6 @@ class TVOSPlatform extends PlatformTarget
 
 		context.ADDL_PBX_BUILD_FILE = "";
 		context.ADDL_PBX_FILE_REFERENCE = "";
-		context.ADDL_PBX_RESOURCES_BUILD_PHASE = "";
-		context.ADDL_PBX_RESOURCE_GROUP = "";
 		context.ADDL_PBX_FRAMEWORKS_BUILD_PHASE = "";
 		context.ADDL_PBX_FRAMEWORK_GROUP = "";
 
@@ -336,33 +318,20 @@ class TVOSPlatform extends PlatformTarget
 				path = Path.tryFullPath(dependency.path);
 				fileType = "wrapper.xcframework";
 			}
-			else if (Path.extension(dependency.path) == "bundle")
-			{
-				name = Path.withoutDirectory(dependency.path);
-				path = Path.tryFullPath(dependency.path);
-				fileType = "wrapper.plug-in";
-			}
 
 			if (name != null)
 			{
-				var buildFileID = "11C0000000000018" + StringTools.getUniqueID();
+				var frameworkID = "11C0000000000018" + StringTools.getUniqueID();
 				var fileID = "11C0000000000018" + StringTools.getUniqueID();
 
-				switch (fileType)
-				{
-					case "wrapper.plug-in":
-						context.ADDL_PBX_BUILD_FILE += "        " + buildFileID + " /* " + name + " in Resources */ = {isa = PBXBuildFile; fileRef = " + fileID + " /* " + name + " */; };\n";
-						context.ADDL_PBX_RESOURCES_BUILD_PHASE += "                " + buildFileID + " /* " + name + " in Resources */,\n";
-						context.ADDL_PBX_RESOURCE_GROUP += "                " + fileID + " /* " + name + " */,\n";
-					case "wrapper.framework", "wrapper.xcframework", "sourcecode.text-based-dylib-definition":
-						context.ADDL_PBX_BUILD_FILE += "        " + buildFileID + " /* " + name + " in Frameworks */ = {isa = PBXBuildFile; fileRef = " + fileID + " /* " + name + " */; };\n";
-						context.ADDL_PBX_FRAMEWORKS_BUILD_PHASE += "                " + buildFileID + " /* " + name + " in Frameworks */,\n";
-						context.ADDL_PBX_FRAMEWORK_GROUP += "                " + fileID + " /* " + name + " */,\n";
+				ArrayTools.addUnique(context.frameworkSearchPaths, Path.directory(path));
 
-						ArrayTools.addUnique(context.frameworkSearchPaths, Path.directory(path));
-				}
-
-				context.ADDL_PBX_FILE_REFERENCE += "        " + fileID + " /* " + name + " */ = {isa = PBXFileReference; lastKnownFileType = \"" + fileType + "\"; name = \"" + name + "\"; path = \"" + path + "\"; sourceTree = SDKROOT; };\n";
+				context.ADDL_PBX_BUILD_FILE += "		" + frameworkID + " /* " + name + " in Frameworks */ = {isa = PBXBuildFile; fileRef = " + fileID + " /* "
+					+ name + " */; };\n";
+				context.ADDL_PBX_FILE_REFERENCE += "		" + fileID + " /* " + name + " */ = {isa = PBXFileReference; lastKnownFileType = \"" + fileType
+					+ "\"; name = \"" + name + "\"; path = \"" + path + "\"; sourceTree = SDKROOT; };\n";
+				context.ADDL_PBX_FRAMEWORKS_BUILD_PHASE += "				" + frameworkID + " /* " + name + " in Frameworks */,\n";
+				context.ADDL_PBX_FRAMEWORK_GROUP += "				" + fileID + " /* " + name + " */,\n";
 			}
 		}
 
@@ -421,6 +390,7 @@ class TVOSPlatform extends PlatformTarget
 		if (arm64) commands.push([
 			"-Dtvos",
 			"-Dappletvos",
+			"-DHXCPP_CPP11",
 			"-DHXCPP_ARM64",
 			"-DOBJC_ARC",
 			"-DENABLE_BITCODE"
@@ -429,6 +399,7 @@ class TVOSPlatform extends PlatformTarget
 			"-Dtvos",
 			"-Dappletvsim",
 			"-Dsimulator",
+			"-DHXCPP_CPP11",
 			"-DOBJC_ARC",
 			"-DENABLE_BITCODE"
 		]);
@@ -437,6 +408,7 @@ class TVOSPlatform extends PlatformTarget
 			"-Dappletvsim",
 			"-Dsimulator",
 			"-DHXCPP_M64",
+			"-DHXCPP_CPP11",
 			"-DOBJC_ARC",
 			"-DENABLE_BITCODE"
 		]);

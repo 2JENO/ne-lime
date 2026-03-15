@@ -4,20 +4,26 @@
 namespace lime {
 
 
+	static SDL_Joystick* accelerometer = 0;
+	static SDL_JoystickID accelerometerID = -1;
 	std::map<int, int> joystickIDs = std::map<int, int> ();
 	std::map<int, SDL_Joystick*> joysticks = std::map<int, SDL_Joystick*> ();
 
 
 	bool SDLJoystick::Connect (int deviceID) {
 
-		SDL_Joystick* joystick = SDL_JoystickOpen (deviceID);
-		int id = SDL_JoystickInstanceID (joystick);
+		if (deviceID != accelerometerID) {
 
-		if (joystick) {
+			SDL_Joystick* joystick = SDL_JoystickOpen (deviceID);
+			int id = SDL_JoystickInstanceID (joystick);
 
-			joysticks[id] = joystick;
-			joystickIDs[deviceID] = id;
-			return true;
+			if (joystick) {
+
+				joysticks[id] = joystick;
+				joystickIDs[deviceID] = id;
+				return true;
+
+			}
 
 		}
 
@@ -45,6 +51,31 @@ namespace lime {
 	int SDLJoystick::GetInstanceID (int deviceID) {
 
 		return joystickIDs[deviceID];
+
+	}
+
+
+	void SDLJoystick::Init () {
+
+		#if defined(IPHONE) || defined(ANDROID) || defined(TVOS)
+		for (int i = 0; i < SDL_NumJoysticks (); i++) {
+
+			if (strstr (SDL_JoystickNameForIndex (i), "Accelerometer")) {
+
+				accelerometer = SDL_JoystickOpen (i);
+				accelerometerID = SDL_JoystickInstanceID (accelerometer);
+
+			}
+
+		}
+		#endif
+
+	}
+
+
+	bool SDLJoystick::IsAccelerometer (int id) {
+
+		return (id == accelerometerID);
 
 	}
 

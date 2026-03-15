@@ -1,6 +1,5 @@
 package lime.app;
 
-import haxe.Int64;
 import lime.graphics.RenderContext;
 import lime.system.System;
 import lime.ui.Gamepad;
@@ -15,6 +14,7 @@ import lime.ui.MouseWheelMode;
 import lime.ui.Touch;
 import lime.ui.Window;
 import lime.ui.WindowAttributes;
+import lime.system.Orientation;
 import lime.utils.Preloader;
 
 /**
@@ -35,6 +35,8 @@ class Application extends Module
 	**/
 	public static var current(default, null):Application;
 
+	public var deviceOrientation(get, never):Orientation;
+
 	/**
 		Meta-data values for the application, such as a version or a package name
 	**/
@@ -54,6 +56,21 @@ class Application extends Module
 		Dispatched when a new window has been created by this application
 	**/
 	public var onCreateWindow = new Event<Window->Void>();
+
+
+	/**
+		Dispatched when the orientation of the display has changed.
+	**/
+	public var onDisplayOrientationChange = new Event<Int->Orientation->Void>();
+
+
+	/**
+		Dispatched when the orientation of the device has changed. Typically,
+		the display and device orientation values are the same. However, if the
+		display orientation is locked to portrait or landscape, the display and
+		device orientations may be different.
+	**/
+	public var onDeviceOrientationChange = new Event<Orientation->Void>();
 
 	/**
 		The Preloader for the current Application
@@ -93,9 +110,8 @@ class Application extends Module
 
 	/**
 		Creates a new Application instance
-		@param	appMeta	The metadata for the application.
 	**/
-	public function new(?appMeta:Map<String, String>)
+	public function new()
 	{
 		super();
 
@@ -104,12 +120,11 @@ class Application extends Module
 			Application.current = this;
 		}
 
-		meta = appMeta != null ? appMeta : new Map();
-
+		meta = new Map();
 		modules = new Array();
-
 		__windowByID = new Map();
 		__windows = new Array();
+
 		__backend = new ApplicationBackend(this);
 
 		__registerLimeModule(this);
@@ -174,31 +189,6 @@ class Application extends Module
 		@param	button	The button that was released
 	**/
 	public function onGamepadButtonUp(gamepad:Gamepad, button:GamepadButton):Void {}
-
-	/**
-		Called when a gamepad axis move event is fired
-		@param	gamepad	The current gamepad
-		@param	axis	The axis that was moved
-		@param	value	The axis value (between 0 and 1)
-		@param	timestamp 	The timestamp of the event
-	**/
-	public function onGamepadAxisMovePrecise(gamepad:Gamepad, axis:GamepadAxis, value:Float, timestamp:Int64):Void {}
-
-	/**
-		Called when a gamepad button down event is fired
-		@param	gamepad	The current gamepad
-		@param	button	The button that was pressed
-		@param	timestamp 	The timestamp of the event
-	**/
-	public function onGamepadButtonDownPrecise(gamepad:Gamepad, button:GamepadButton, timestamp:Int64):Void {}
-
-	/**
-		Called when a gamepad button up event is fired
-		@param	gamepad	The current gamepad
-		@param	button	The button that was released
-		@param	timestamp 	The timestamp of the event
-	**/
-	public function onGamepadButtonUpPrecise(gamepad:Gamepad, button:GamepadButton, timestamp:Int64):Void {}
 
 	/**
 		Called when a gamepad is connected
@@ -267,22 +257,6 @@ class Application extends Module
 		@param	modifier	The modifier of the key that was released
 	**/
 	public function onKeyUp(keyCode:KeyCode, modifier:KeyModifier):Void {}
-
-	/**
-		Called when a key down event is fired on the primary window
-		@param	keyCode	The code of the key that was pressed
-		@param	modifier	The modifier of the key that was pressed
-		@param	timestamp 	The timestamp of the event
-	**/
-	public function onKeyDownPrecise(keyCode:KeyCode, modifier:KeyModifier, timestamp:Int64):Void {}
-
-	/**
-		Called when a key up event is fired on the primary window
-		@param	keyCode	The code of the key that was released
-		@param	modifier	The modifier of the key that was released
-		@param	timestamp 	The timestamp of the event
-	**/
-	public function onKeyUpPrecise(keyCode:KeyCode, modifier:KeyModifier, timestamp:Int64):Void {}
 
 	/**
 		Called when the module is exiting
@@ -517,8 +491,6 @@ class Application extends Module
 				window.onFullscreen.add(onWindowFullscreen);
 				window.onKeyDown.add(onKeyDown);
 				window.onKeyUp.add(onKeyUp);
-				window.onKeyDownPrecise.add(onKeyDownPrecise);
-				window.onKeyUpPrecise.add(onKeyUpPrecise);
 				window.onLeave.add(onWindowLeave);
 				window.onMinimize.add(onWindowMinimize);
 				window.onMouseDown.add(onMouseDown);
@@ -610,9 +582,6 @@ class Application extends Module
 		gamepad.onAxisMove.add(onGamepadAxisMove.bind(gamepad));
 		gamepad.onButtonDown.add(onGamepadButtonDown.bind(gamepad));
 		gamepad.onButtonUp.add(onGamepadButtonUp.bind(gamepad));
-		gamepad.onAxisMovePrecise.add(onGamepadAxisMovePrecise.bind(gamepad));
-		gamepad.onButtonDownPrecise.add(onGamepadButtonDownPrecise.bind(gamepad));
-		gamepad.onButtonUpPrecise.add(onGamepadButtonUpPrecise.bind(gamepad));
 		gamepad.onDisconnect.add(onGamepadDisconnect.bind(gamepad));
 	}
 
@@ -680,6 +649,11 @@ class Application extends Module
 	@:noCompletion private inline function get_windows():Array<Window>
 	{
 		return __windows;
+	}
+
+	@:noCompletion private function get_deviceOrientation():Orientation
+	{
+		return __backend.getDeviceOrientation();
 	}
 }
 

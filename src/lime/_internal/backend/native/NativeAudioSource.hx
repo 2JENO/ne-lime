@@ -2,14 +2,16 @@ package lime._internal.backend.native;
 
 import haxe.Int64;
 import haxe.Timer;
-import lime.app.Application;
-import lime.math.Vector4;
+
 import lime.media.openal.AL;
 import lime.media.openal.ALBuffer;
 import lime.media.openal.ALSource;
+#if lime_vorbis
 import lime.media.vorbis.Vorbis;
 import lime.media.vorbis.VorbisFile;
+#end
 
+import lime.math.Vector4;
 import lime.media.AudioManager;
 import lime.media.AudioSource;
 import lime.utils.UInt8Array;
@@ -57,14 +59,6 @@ class NativeAudioSource
 	{
 		if (handle != null)
 		{
-			if (Application.current != null && !stream)
-			{
-				if (Application.current.onUpdate.has(checkPlay))
-				{
-					// trace('[AUDIO] removed play check event!');
-					Application.current.onUpdate.remove(checkPlay);
-				}
-			}
 			stop();
 			AL.sourcei(handle, AL.BUFFER, null);
 			AL.deleteSource(handle);
@@ -374,32 +368,6 @@ class NativeAudioSource
 		parent.onComplete.dispatch();
 	}
 
-	private function checkPlay(delta:Int):Void
-	{
-		final finished:Bool = AL.getSourcei(handle, AL.SOURCE_STATE) != AL.PLAYING;
-
-		if (!finished) return;
-		if (loops > 0)
-		{
-			playing = false;
-			loops--;
-			setCurrentTime(0);
-			play();
-			return;
-		}
-		else
-		{
-			if (!completed)	stop();
-		}
-
-		if (!completed)
-		{
-			// trace('[AUDIO] audio finished playing!');
-			parent.onComplete.dispatch();
-		}
-		completed = true;
-	}
-
 	// Get & Set Methods
 	public function getCurrentTime():Int
 	{
@@ -455,7 +423,7 @@ class NativeAudioSource
 			else if (parent.buffer != null)
 			{
 				AL.sourceRewind(handle);
-
+				if (playing) AL.sourcePlay(handle);
 				// AL.sourcef (handle, AL.SEC_OFFSET, (value + parent.offset) / 1000);
 
 				var secondOffset = (value + parent.offset) / 1000;
@@ -468,7 +436,6 @@ class NativeAudioSource
 				var totalOffset = Std.int(dataLength * ratio);
 
 				AL.sourcei(handle, AL.BYTE_OFFSET, totalOffset);
-				if (playing) AL.sourcePlay(handle);
 			}
 		}
 
@@ -484,8 +451,8 @@ class NativeAudioSource
 			if (timeRemaining > 0)
 			{
 				completed = false;
-				// timer = new Timer(timeRemaining);
-				// timer.run = timer_onRun;
+				timer = new Timer(timeRemaining);
+				timer.run = timer_onRun;
 			}
 			else
 			{
@@ -538,13 +505,13 @@ class NativeAudioSource
 				timer.stop();
 			}
 
-			// var timeRemaining = Std.int((value - getCurrentTime()) / getPitch());
+			var timeRemaining = Std.int((value - getCurrentTime()) / getPitch());
 
-			// if (timeRemaining > 0)
-			// {
-			// 	timer = new Timer(timeRemaining);
-			// 	timer.run = timer_onRun;
-			// }
+			if (timeRemaining > 0)
+			{
+				timer = new Timer(timeRemaining);
+				timer.run = timer_onRun;
+			}
 		}
 
 		return length = value;
@@ -581,13 +548,13 @@ class NativeAudioSource
 				timer.stop();
 			}
 
-			// var timeRemaining = Std.int((getLength() - getCurrentTime()) / value);
+			var timeRemaining = Std.int((getLength() - getCurrentTime()) / value);
 
-			// if (timeRemaining > 0)
-			// {
-			// 	timer = new Timer(timeRemaining);
-			// 	timer.run = timer_onRun;
-			// }
+			if (timeRemaining > 0)
+			{
+				timer = new Timer(timeRemaining);
+				timer.run = timer_onRun;
+			}
 		}
 
 		if (handle != null)
@@ -602,7 +569,7 @@ class NativeAudioSource
 	{
 		if (handle != null)
 		{
-			#if !webassembly
+			#if !emscripten
 			var value = AL.getSource3f(handle, AL.POSITION);
 			position.x = value[0];
 			position.y = value[1];

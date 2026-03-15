@@ -300,7 +300,6 @@ class ProjectXMLParser extends HXProject
 		var library = null;
 		var targetPath = "";
 		var glyphs = null;
-		var deliveryPackName = '';
 		var type = null;
 
 		if (element.has.path)
@@ -330,11 +329,6 @@ class ProjectXMLParser extends HXProject
 		if (element.has.glyphs)
 		{
 			glyphs = substitute(element.att.glyphs);
-		}
-
-		if (element.has.deliveryPackName)
-		{
-			deliveryPackName = substitute(element.att.deliveryPackName);
 		}
 
 		if (isTemplate)
@@ -394,12 +388,11 @@ class ProjectXMLParser extends HXProject
 					asset.glyphs = glyphs;
 				}
 
-				asset.deliveryPackName = deliveryPackName;
 				assets.push(asset);
 			}
 			else if (Path.extension(path) == "bundle")
 			{
-				parseAssetsElementLibrary(path, targetPath, "*", "", type, embed, library, glyphs, true, deliveryPackName);
+				parseAssetsElementLibrary(path, targetPath, "*", "", type, embed, library, glyphs, true);
 			}
 			else
 			{
@@ -454,7 +447,7 @@ class ProjectXMLParser extends HXProject
 					}*/
 				}
 
-				parseAssetsElementDirectory(path, targetPath, include, exclude, type, embed, library, glyphs, true, deliveryPackName);
+				parseAssetsElementDirectory(path, targetPath, include, exclude, type, embed, library, glyphs, true);
 			}
 		}
 		else
@@ -481,7 +474,6 @@ class ProjectXMLParser extends HXProject
 					var childLibrary = library;
 					var childType = type;
 					var childGlyphs = glyphs;
-					var childDeliveryPackName = deliveryPackName;
 
 					if (childElement.has.rename)
 					{
@@ -501,11 +493,6 @@ class ProjectXMLParser extends HXProject
 					if (childElement.has.glyphs)
 					{
 						childGlyphs = substitute(childElement.att.glyphs);
-					}
-
-					if (childElement.has.deliveryPackName)
-					{
-						childDeliveryPackName = substitute(childElement.att.deliveryPackName);
 					}
 
 					switch (childElement.name)
@@ -540,7 +527,6 @@ class ProjectXMLParser extends HXProject
 						asset.glyphs = childGlyphs;
 					}
 
-					asset.deliveryPackName = childDeliveryPackName;
 					assets.push(asset);
 				}
 			}
@@ -548,7 +534,7 @@ class ProjectXMLParser extends HXProject
 	}
 
 	private function parseAssetsElementDirectory(path:String, targetPath:String, include:String, exclude:String, type:AssetType, embed:Null<Bool>,
-			library:String, glyphs:String, recursive:Bool, deliveryPackName:String):Void
+			library:String, glyphs:String, recursive:Bool):Void
 	{
 		var files = FileSystem.readDirectory(path);
 
@@ -563,13 +549,13 @@ class ProjectXMLParser extends HXProject
 			{
 				if (Path.extension(file) == "bundle")
 				{
-					parseAssetsElementLibrary(path + "/" + file, targetPath + file, include, exclude, type, embed, library, glyphs, true, deliveryPackName);
+					parseAssetsElementLibrary(path + "/" + file, targetPath + file, include, exclude, type, embed, library, glyphs, true);
 				}
 				else if (recursive)
 				{
 					if (filter(file, ["*"], exclude.split("|")))
 					{
-						parseAssetsElementDirectory(path + "/" + file, targetPath + file, include, exclude, type, embed, library, glyphs, true, deliveryPackName);
+						parseAssetsElementDirectory(path + "/" + file, targetPath + file, include, exclude, type, embed, library, glyphs, true);
 					}
 				}
 			}
@@ -585,7 +571,6 @@ class ProjectXMLParser extends HXProject
 						asset.glyphs = glyphs;
 					}
 
-					asset.deliveryPackName = deliveryPackName;
 					assets.push(asset);
 				}
 			}
@@ -593,7 +578,7 @@ class ProjectXMLParser extends HXProject
 	}
 
 	private function parseAssetsElementLibrary(path:String, targetPath:String, include:String, exclude:String, type:AssetType, embed:Null<Bool>,
-			library:String, glyphs:String, recursive:Bool, deliveryPackName:String):Void
+			library:String, glyphs:String, recursive:Bool):Void
 	{
 		var includePath = findIncludeFile(path);
 
@@ -622,7 +607,6 @@ class ProjectXMLParser extends HXProject
 					asset.library = library;
 					asset.data = manifest.serialize();
 					asset.embed = embed;
-					asset.deliveryPackName = deliveryPackName;
 					assets.push(asset);
 
 					for (manifestAsset in manifest.assets)
@@ -633,7 +617,6 @@ class ProjectXMLParser extends HXProject
 							asset.id = manifestAsset.id;
 							asset.library = library;
 							asset.embed = embed;
-							asset.deliveryPackName = deliveryPackName;
 							assets.push(asset);
 						}
 					}
@@ -647,7 +630,7 @@ class ProjectXMLParser extends HXProject
 
 		if (!processedLibrary)
 		{
-			parseAssetsElementDirectory(path, targetPath, include, exclude, type, embed, library, glyphs, true, deliveryPackName);
+			parseAssetsElementDirectory(path, targetPath, include, exclude, type, embed, library, glyphs, true);
 		}
 	}
 
@@ -700,7 +683,7 @@ class ProjectXMLParser extends HXProject
 		{
 			switch (attribute)
 			{
-				case "title", "description", "package", "version", "company", "company-id", "build-number", "company-url", "copyright-years":
+				case "title", "description", "package", "version", "company", "company-id", "build-number", "company-url":
 					var value = substitute(element.att.resolve(attribute));
 
 					defines.set("APP_" + StringTools.replace(attribute, "-", "_").toUpperCase(), value);
@@ -1356,68 +1339,61 @@ class ProjectXMLParser extends HXProject
 						path = Path.combine(extensionPath, substitute(element.att.name));
 					}
 
-					if (target == Platform.ANDROID && element.has.adaptive)
+					var icon = new Icon(path);
+
+					if (element.has.size)
 					{
-						adaptiveIcon = new AdaptiveIcon(path, element.has.round ? element.att.round == "true" : false);
+						var parsedValue = Std.parseInt(substitute(element.att.size));
+						if (parsedValue == null)
+						{
+							Log.warn("Ignoring unknown size=\"" + element.att.size + "\"");
+						}
+						else
+						{
+							icon.size = icon.width = icon.height = parsedValue;
+						}
 					}
-					else
+
+					if (element.has.width)
 					{
-						var icon = new Icon(path);
-
-						if (element.has.size)
+						var parsedValue = Std.parseInt(substitute(element.att.width));
+						if (parsedValue == null)
 						{
-							var parsedValue = Std.parseInt(substitute(element.att.size));
-							if (parsedValue == null)
-							{
-								Log.warn("Ignoring unknown size=\"" + element.att.size + "\"");
-							}
-							else
-							{
-								icon.size = icon.width = icon.height = parsedValue;
-							}
+							Log.warn("Ignoring unknown width=\"" + element.att.width + "\"");
 						}
-
-						if (element.has.width)
+						else
 						{
-							var parsedValue = Std.parseInt(substitute(element.att.width));
-							if (parsedValue == null)
-							{
-								Log.warn("Ignoring unknown width=\"" + element.att.width + "\"");
-							}
-							else
-							{
-								icon.width = parsedValue;
-							}
+							icon.width = parsedValue;
 						}
-
-						if (element.has.height)
-						{
-							var parsedValue = Std.parseInt(substitute(element.att.height));
-							if (parsedValue == null)
-							{
-								Log.warn("Ignoring unknown height=\"" + element.att.height + "\"");
-							}
-							else
-							{
-								icon.height = parsedValue;
-							}
-						}
-
-						if (element.has.priority)
-						{
-							var parsedValue = Std.parseInt(substitute(element.att.priority));
-							if (parsedValue == null)
-							{
-								Log.warn("Ignoring unknown priority=\"" + element.att.priority + "\"");
-							}
-							else
-							{
-								icon.priority = parsedValue;
-							}
-						}
-
-						icons.push(icon);
 					}
+
+					if (element.has.height)
+					{
+						var parsedValue = Std.parseInt(substitute(element.att.height));
+						if (parsedValue == null)
+						{
+							Log.warn("Ignoring unknown height=\"" + element.att.height + "\"");
+						}
+						else
+						{
+							icon.height = parsedValue;
+						}
+					}
+
+					if (element.has.priority)
+					{
+						var parsedValue = Std.parseInt(substitute(element.att.priority));
+						if (parsedValue == null)
+						{
+							Log.warn("Ignoring unknown priority=\"" + element.att.priority + "\"");
+						}
+						else
+						{
+							icon.priority = parsedValue;
+						}
+					}
+
+					icons.push(icon);
 
 				case "source", "classpath":
 					var path = "";
@@ -1760,17 +1736,9 @@ class ProjectXMLParser extends HXProject
 									config.push("android.permission", value);
 								}
 
-							case "gradle-maven-repositories":
-								var repositories = config.getArrayString("android.gradle-maven-repositories");
-
-								if (repositories == null || repositories.indexOf(value) == -1)
-								{
-									config.push("android.gradle-maven-repositories", value);
-								}
-
 							case "gradle-version":
 								config.set("android.gradle-version", value);
-
+							
 							case "gradle-plugin":
 								config.set("android.gradle-plugin", value);
 

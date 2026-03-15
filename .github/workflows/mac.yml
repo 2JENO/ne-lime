@@ -4,11 +4,11 @@ on:
   workflow_call:
 
 env:
-  HAXE_VERSION: 4.3.5
+  HAXE_VERSION: 4.3.6
 
 jobs:
   mac:
-    runs-on: macos-26
+    runs-on: macos-15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -18,20 +18,22 @@ jobs:
         uses: krdlab/setup-haxe@master
         with:
           haxe-version: ${{ env.HAXE_VERSION }}
+      - name: Set HAXEPATH
+        run: echo "HAXEPATH=$HAXE_STD_PATH/.." >> $GITHUB_ENV
       - name: Install Haxe dependencies
         run: |
-          haxelib git hxcpp https://github.com/FunkinCrew/hxcpp --quiet
+          haxelib git hxcpp https://github.com/Psych-Slice/hxcpp.git e48576506a270237ec2ec6501c0bedbd03034af1 --quiet
           haxelib install format --quiet
-          haxelib install hxp --quiet
+          haxelib install hxp
+      - name: Enable HXCPP compile cache
+        run: echo "HXCPP_COMPILE_CACHE=~/.hxcpp" >> $GITHUB_ENV
       - name: Configure Lime
         run: haxelib dev lime ${{ github.workspace }}
       - name: Rebuild Lime
         run: |
-          rm -rf ./ndll
-          mkdir ./ndll
-          haxelib run lime rebuild hxcpp
-          # haxelib run lime rebuild mac -32 -nocolor -nocffi -eval
-          haxelib run lime rebuild mac -64 -nocolor -nocffi -eval
+          # haxelib run lime rebuild mac -32 -release -nocolor -nocffi -D HXCPP_M32
+          haxelib run lime rebuild mac -64 -release -nocolor -nocffi -D HXCPP_M64
+          haxelib run lime rebuild mac -arm64 -release -nocolor -nocffi -D HXCPP_ARM64
       # - name: Upload Artifact (x86)
         # uses: actions/upload-artifact@v4
         # with:
@@ -45,36 +47,17 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Mac64-NDLL
-          path: ndll
+          path: |
+            ndll/Mac64/
+            !**/.gitignore
+            lime.png
           if-no-files-found: error
-  macarm64:
-    runs-on: macos-26
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          submodules: true
-      - name: Setup Haxe
-        uses: krdlab/setup-haxe@master
-        with:
-          haxe-version: ${{ env.HAXE_VERSION }}
-      - name: Install Haxe dependencies
-        run: |
-          haxelib git hxcpp https://github.com/FunkinCrew/hxcpp --quiet
-          haxelib install format --quiet
-          haxelib install hxp --quiet
-          haxelib dev lime $GITHUB_WORKSPACE
-      - name: Configure Lime
-        run: haxelib dev lime ${{ github.workspace }}
-      - name: Rebuild Lime
-        run: |
-          rm -rf ./ndll
-          mkdir ./ndll
-          haxelib run lime rebuild hxcpp
-          haxelib run lime rebuild mac -arm64 -nocolor -nocffi -eval -D HXCPP_ARM64
-      - name: Upload Artifact
+      - name: Upload Artifact (arm64)
         uses: actions/upload-artifact@v4
         with:
           name: MacArm64-NDLL
-          path: ndll
+          path: |
+            ndll/MacArm64/
+            !**/.gitignore
+            lime.png
           if-no-files-found: error

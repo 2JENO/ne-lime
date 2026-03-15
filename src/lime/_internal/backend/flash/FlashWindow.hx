@@ -290,11 +290,6 @@ class FlashWindow
 
 	public function focus():Void {}
 
-	public function setVSyncMode(mode:WindowVSyncMode):Bool
-	{
-		return false;
-	}
-
 	public function getCursor():MouseCursor
 	{
 		return cursor;
@@ -303,11 +298,6 @@ class FlashWindow
 	public function getDisplay():Display
 	{
 		return System.getDisplay(0);
-	}
-
-	public function getNativeHandle():Dynamic
-	{
-		return 0;
 	}
 
 	public function getDisplayMode():DisplayMode

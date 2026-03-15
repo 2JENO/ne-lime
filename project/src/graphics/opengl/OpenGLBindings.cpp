@@ -93,45 +93,6 @@ namespace lime {
 	}
 
 
-	void hl_gc_gl_object (HL_CFFIPointer* handle) {
-
-		gc_gl_mutex.Lock ();
-
-		void* object = handle->ptr;
-
-		if (glObjectTypes.find (object) != glObjectTypes.end ()) {
-
-			GLObjectType type = glObjectTypes[object];
-
-			if (type != TYPE_SYNC) {
-
-				GLuint id = glObjectIDs[object];
-
-				gc_gl_id.push_back (id);
-				gc_gl_type.push_back (type);
-
-				glObjects[type].erase (id);
-				glObjectIDs.erase (object);
-				glObjectTypes.erase (object);
-
-			} else {
-
-				void* ptr = glObjectPtrs[object];
-
-				gc_gl_ptr.push_back (ptr);
-
-				glObjectPtrs.erase (object);
-				glObjectTypes.erase (object);
-
-			}
-
-		}
-
-		gc_gl_mutex.Unlock ();
-
-	}
-
-
 	void gc_gl_run () {
 
 		if (gc_gl_id.size () > 0) {
@@ -558,19 +519,6 @@ namespace lime {
 
 		glBlendFuncSeparate (srcRGB, destRGB, srcAlpha, destAlpha);
 
-	}
-
-	HL_PRIM void HL_NAME(hl_gl_blend_barrier) () {
-
-		#ifdef GL_GLEXT_PROTOTYPES
-		glBlendBarrierKHR ();
-		#endif
-	}
-
-	void lime_gl_blend_barrier () {
-		#ifdef GL_GLEXT_PROTOTYPES
-		glBlendBarrierKHR ();
-		#endif
 	}
 
 
@@ -1614,7 +1562,7 @@ namespace lime {
 
 		#ifdef LIME_GLES3_API
 		GLsync result = glFenceSync (condition, flags);
-		HL_CFFIPointer* handle = HLCFFIPointer (result, (hl_finalizer)hl_gc_gl_object);
+		HL_CFFIPointer* handle = HLCFFIPointer (result, (hl_finalizer)gc_gl_object);
 		glObjectPtrs[handle] = result;
 		return handle;
 		#else
@@ -3930,7 +3878,7 @@ namespace lime {
 	HL_PRIM HL_CFFIPointer* HL_NAME(hl_gl_object_register) (int id, int type, void* object) {
 
 		GLObjectType _type = (GLObjectType)type;
-		HL_CFFIPointer* handle = HLCFFIPointer ((vobj*)object, (hl_finalizer)hl_gc_gl_object);
+		HL_CFFIPointer* handle = HLCFFIPointer ((vobj*)object, (hl_finalizer)gc_gl_object);
 
 		//if (glObjects[_type].find (id) != glObjects[_type].end ()) {
 			//
@@ -5417,7 +5365,6 @@ namespace lime {
 	DEFINE_PRIME2v (lime_gl_blend_equation_separate);
 	DEFINE_PRIME2v (lime_gl_blend_func);
 	DEFINE_PRIME4v (lime_gl_blend_func_separate);
-	DEFINE_PRIME0v (lime_gl_blend_barrier);
 	DEFINE_PRIME10v (lime_gl_blit_framebuffer);
 	DEFINE_PRIME4v (lime_gl_buffer_data);
 	DEFINE_PRIME4v (lime_gl_buffer_sub_data);
@@ -5695,7 +5642,6 @@ namespace lime {
 	DEFINE_HL_PRIM (_VOID, hl_gl_blend_equation_separate, _I32 _I32);
 	DEFINE_HL_PRIM (_VOID, hl_gl_blend_func, _I32 _I32);
 	DEFINE_HL_PRIM (_VOID, hl_gl_blend_func_separate, _I32 _I32 _I32 _I32);
-	DEFINE_HL_PRIM (_VOID, hl_gl_blend_barrier, _NO_ARG);
 	DEFINE_HL_PRIM (_VOID, hl_gl_blit_framebuffer, _I32 _I32 _I32 _I32 _I32 _I32 _I32 _I32 _I32 _I32);
 	DEFINE_HL_PRIM (_VOID, hl_gl_buffer_data, _I32 _I32 _F64 _I32);
 	DEFINE_HL_PRIM (_VOID, hl_gl_buffer_sub_data, _I32 _I32 _I32 _F64);

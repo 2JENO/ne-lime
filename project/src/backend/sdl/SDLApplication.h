@@ -7,6 +7,7 @@
 #include <app/ApplicationEvent.h>
 #include <graphics/RenderEvent.h>
 #include <system/ClipboardEvent.h>
+#include <system/OrientationEvent.h>
 #include <system/SensorEvent.h>
 #include <ui/DropEvent.h>
 #include <ui/GamepadEvent.h>
@@ -38,7 +39,6 @@ namespace lime {
 			void RegisterWindow (SDLWindow *window);
 
 		private:
-			void InitializeSensors();
 
 			void HandleEvent (SDL_Event* event);
 			void ProcessClipboardEvent (SDL_Event* event);
@@ -47,17 +47,12 @@ namespace lime {
 			void ProcessJoystickEvent (SDL_Event* event);
 			void ProcessKeyEvent (SDL_Event* event);
 			void ProcessMouseEvent (SDL_Event* event);
-			#if defined(ANDROID) || defined (IPHONE)
 			void ProcessSensorEvent (SDL_Event* event);
-			#endif
 			void ProcessTextEvent (SDL_Event* event);
 			void ProcessTouchEvent (SDL_Event* event);
 			void ProcessWindowEvent (SDL_Event* event);
 			int WaitEvent (SDL_Event* event);
 
-			#if defined(ANDROID) || defined (IPHONE)
-			static int HandleAppLifecycleEvent (void* userdata, SDL_Event* event);
-			#endif
 			static void UpdateFrame ();
 			static void UpdateFrame (void*);
 
@@ -75,6 +70,7 @@ namespace lime {
 			Uint32 lastUpdate;
 			MouseEvent mouseEvent;
 			Uint32 nextUpdate;
+			OrientationEvent orientationEvent;
 			RenderEvent renderEvent;
 			SensorEvent sensorEvent;
 			TextEvent textEvent;

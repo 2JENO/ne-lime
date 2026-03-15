@@ -1,28 +1,36 @@
 package org.haxe.lime;
 
-
-import android.Manifest;
 import android.content.Context;
+import android.media.AudioAttributes;
+import android.media.AudioFocusRequest;
+import android.media.AudioManager;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
+::if (ANDROID_USE_ANDROIDX)::
+import androidx.core.content.FileProvider;
+::end::
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.Looper;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
-import android.os.VibratorManager;
+import android.view.DisplayCutout;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.KeyCharacterMap;
 import android.view.KeyEvent;
+import android.view.OrientationEventListener;
 import android.view.View;
+import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.webkit.MimeTypeMap;
+import android.Manifest;
 import org.haxe.extension.Extension;
+import android.view.WindowManager;
 import org.libsdl.app.SDLActivity;
+import org.haxe.lime.FileDialog;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -32,12 +40,31 @@ import java.util.List;
 public class GameActivity extends SDLActivity {
 
 
+	private static AudioManager audioManager;
+	private static AudioFocusRequest audioFocusRequest;
+	private static AudioManager.OnAudioFocusChangeListener afChangeListener;
 	private static AssetManager assetManager;
 	private static List<Extension> extensions;
+	// TODO: Handle the rest of the callbacks for filedialogs?
+	private static List<FileDialog> filedialogs;
 	private static DisplayMetrics metrics;
+	private static DisplayCutout displayCutout;
 	private static Vibrator vibrator;
+	private static OrientationEventListener orientationListener;
+	private static HaxeObject deviceOrientationListener;
+	private static int deviceOrientation = SDL_ORIENTATION_UNKNOWN;
 
 	public Handler handler;
+
+	public static void setDeviceOrientationListener (HaxeObject object) {
+
+		deviceOrientationListener = object;
+		if (deviceOrientationListener != null)
+		{
+			deviceOrientationListener.call1("onOrientationChanged", deviceOrientation);
+		}
+
+	}
 
 	public static double getDisplayXDPI () {
 
@@ -48,6 +75,37 @@ public class GameActivity extends SDLActivity {
 		}
 
 		return metrics.xdpi;
+
+	}
+
+	public static int[] getDisplaySafeAreaInsets () {
+
+		if (displayCutout == null) {
+
+			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+
+				WindowInsets windowInsets = ((GameActivity)Extension.mainContext).getWindow().getDecorView().getRootWindowInsets();
+
+				if (windowInsets != null) {
+
+					displayCutout = windowInsets.getDisplayCutout();
+
+				}
+			}
+		}
+
+		int[] result = {0, 0, 0, 0};
+
+		if (displayCutout != null) {
+
+			result[0] = displayCutout.getSafeInsetLeft();
+			result[1] = displayCutout.getSafeInsetTop();
+			result[2] = displayCutout.getSafeInsetRight();
+			result[3] = displayCutout.getSafeInsetBottom();
+
+		}
+
+		return result;
 
 	}
 
@@ -88,6 +146,12 @@ public class GameActivity extends SDLActivity {
 
 		}
 
+		if (filedialogs != null) {
+			for (FileDialog fileDialog : filedialogs) {
+				fileDialog.onActivityResult (requestCode, resultCode, data);
+			}
+		}
+
 		super.onActivityResult (requestCode, resultCode, data);
 
 	}
@@ -109,32 +173,105 @@ public class GameActivity extends SDLActivity {
 
 	}
 
+	public static FileDialog createFileDialog(final HaxeObject haxeObject)
+	{
+		FileDialog fileDialog = new FileDialog(haxeObject);
+		if (filedialogs == null)
+		{
+			filedialogs = new ArrayList<FileDialog> ();
+		}
+		filedialogs.add(fileDialog);
+		return fileDialog;
+	}
 
-	@SuppressWarnings("deprecation")
 	protected void onCreate (Bundle state) {
 
-		super.onCreate (state);
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
 
-		assetManager = getAssets ();
-
-		if (checkSelfPermission(Manifest.permission.VIBRATE) == PackageManager.PERMISSION_GRANTED) {
-
-			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-
-				VibratorManager vibratorManager = (VibratorManager)mSingleton.getSystemService(Context.VIBRATOR_MANAGER_SERVICE);
-
-				if (vibratorManager != null)
-					vibrator = vibratorManager.getDefaultVibrator();
-
-			} else {
-
-				vibrator = (Vibrator)mSingleton.getSystemService(Context.VIBRATOR_SERVICE);
-
-			}
+			getWindow ().addFlags (WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
 
 		}
 
-		handler = new Handler (Looper.getMainLooper ());
+		super.onCreate (state);
+
+		orientationListener = new OrientationEventListener(this) {
+
+			public void onOrientationChanged(int degrees) {
+
+				int orientation = SDL_ORIENTATION_UNKNOWN;
+				if (degrees >= 315 || (degrees >= 0 && degrees < 45))
+				{
+					orientation = SDL_ORIENTATION_PORTRAIT;
+				}
+				else if	(degrees >= 45 && degrees < 135)
+				{
+					orientation = SDL_ORIENTATION_LANDSCAPE_FLIPPED;
+				}
+				else if	(degrees >= 135 && degrees < 225)
+				{
+					orientation = SDL_ORIENTATION_PORTRAIT_FLIPPED;
+				}
+				else if	(degrees >= 225 && degrees < 315)
+				{
+					orientation = SDL_ORIENTATION_LANDSCAPE;
+				}
+
+				if (deviceOrientation != orientation) {
+					deviceOrientation = orientation;
+					if (deviceOrientationListener != null)
+					{
+						deviceOrientationListener.call1("onOrientationChanged", deviceOrientation);
+					}
+				}
+
+			}
+
+		};
+
+		audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+
+		afChangeListener = new AudioManager.OnAudioFocusChangeListener() {
+			@Override
+			public void onAudioFocusChange(int focusChange) {
+				switch (focusChange) {
+					case AudioManager.AUDIOFOCUS_GAIN:
+						break;
+					case AudioManager.AUDIOFOCUS_LOSS:
+						break;
+					case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
+						break;
+					case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
+						break;
+				}
+			}
+		};
+
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+			AudioAttributes audioAttributes = new AudioAttributes.Builder()
+					.setUsage(AudioAttributes.USAGE_GAME)
+					.setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+					.build();
+
+			audioFocusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+					.setAudioAttributes(audioAttributes)
+					.setOnAudioFocusChangeListener(afChangeListener)
+					.setAcceptsDelayedFocusGain(true)
+					.build();
+		}
+
+		assetManager = getAssets ();
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+			if (checkSelfPermission(Manifest.permission.VIBRATE) == PackageManager.PERMISSION_GRANTED) {
+
+				vibrator = (Vibrator)mSingleton.getSystemService (Context.VIBRATOR_SERVICE);
+
+			}
+		}
+		else{
+			vibrator = (Vibrator)mSingleton.getSystemService (Context.VIBRATOR_SERVICE);
+		}
+
+		handler = new Handler ();
 
 		Extension.assetManager = assetManager;
 		Extension.callbackHandler = handler;
@@ -142,6 +279,34 @@ public class GameActivity extends SDLActivity {
 		Extension.mainContext = this;
 		Extension.mainView = mLayout;
 		Extension.packageName = getApplicationContext ().getPackageName ();
+
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+
+			switch ("::ANDROID_DISPLAY_CUTOUT::") {
+
+				case "always":
+					getWindow().getAttributes().layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS;
+					break;
+
+				case "never":
+					getWindow().getAttributes().layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_NEVER;
+					break;
+
+				case "shortEdges":
+					getWindow().getAttributes().layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+					break;
+
+				case "default":
+					getWindow().getAttributes().layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT;
+					break;
+
+				default:
+					getWindow().getAttributes().layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT;
+					break;
+
+			}
+
+		}
 
 		if (extensions == null) {
 
@@ -157,6 +322,11 @@ public class GameActivity extends SDLActivity {
 
 		}
 
+		if (filedialogs != null) {
+			for (FileDialog fileDialog : filedialogs) {
+				fileDialog.onCreate (state);
+			}
+		}
 	}
 
 
@@ -207,6 +377,8 @@ public class GameActivity extends SDLActivity {
 
 		}
 
+		orientationListener.disable();
+
 		super.onPause ();
 
 		for (Extension extension : extensions) {
@@ -253,6 +425,22 @@ public class GameActivity extends SDLActivity {
 	@Override protected void onResume () {
 
 		super.onResume ();
+
+		orientationListener.enable();
+
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+
+			audioManager.requestAudioFocus(audioFocusRequest);
+
+		} else {
+
+			audioManager.requestAudioFocus(
+				afChangeListener,
+				AudioManager.STREAM_MUSIC,
+				AudioManager.AUDIOFOCUS_GAIN_TRANSIENT
+			);
+
+		}
 
 		for (Extension extension : extensions) {
 
@@ -306,6 +494,16 @@ public class GameActivity extends SDLActivity {
 
 		super.onStop ();
 
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+
+			audioManager.abandonAudioFocusRequest(audioFocusRequest);
+
+		} else {
+
+			audioManager.abandonAudioFocus(afChangeListener);
+
+		}
+
 		for (Extension extension : extensions) {
 
 			extension.onStop ();
@@ -334,6 +532,61 @@ public class GameActivity extends SDLActivity {
 	::end::
 
 
+	public static void openFile(String path) {
+    	try {
+        	String extension = path;
+        	int index = path.lastIndexOf('.');
+
+        	if (index > 0) {
+         	   extension = path.substring(index + 1);
+        	}
+
+        	String mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension);
+        	File file = new File(path);
+
+			Uri uri;
+			::if (ANDROID_USE_ANDROIDX)::
+			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) { // Android 7.0+
+    			uri = FileProvider.getUriForFile(Extension.mainActivity,"::APP_PACKAGE::.fileprovider", file);
+			} else { // Android 5.0 - 6.0
+    			uri = Uri.fromFile(file);
+			}
+			::else::
+			uri = Uri.fromFile(file);
+			::end::
+
+        	Intent intent = new Intent();
+        	intent.setAction(Intent.ACTION_VIEW);
+        	intent.setDataAndType(uri, mimeType);
+			intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        	//intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+
+        	Extension.mainActivity.startActivity(intent);
+
+    	} catch (Exception e) {
+			Log.e("GameActivity", e.toString());
+    	}
+	}
+
+
+	public static void openURL (String url, String target) {
+
+		Intent browserIntent = new Intent (Intent.ACTION_VIEW).setData (Uri.parse (url));
+
+		try {
+
+			Extension.mainActivity.startActivity (browserIntent);
+
+		} catch (Exception e) {
+
+			Log.e ("GameActivity", e.toString ());
+			return;
+
+		}
+
+	}
+
+
 	public static void postUICallback (final long handle) {
 
 		Extension.callbackHandler.post (new Runnable () {
@@ -349,22 +602,19 @@ public class GameActivity extends SDLActivity {
 	}
 
 
-	@SuppressWarnings("deprecation")
-	public static void vibrate (int period, int duration, int amplitude) {
+	public static void vibrate (int period, int duration) {
 
-		if (vibrator == null || !vibrator.hasVibrator () || period < 0 || duration <= 0 || amplitude < 0) {
+		if (vibrator == null || !vibrator.hasVibrator () || period < 0 || duration <= 0) {
 
 			return;
 
 		}
 
-		int vibrationAmplitude = amplitude <= 0 ? VibrationEffect.DEFAULT_AMPLITUDE : Math.min(amplitude, 255);
-
 		if (period == 0) {
 
 			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
 
-				vibrator.vibrate (VibrationEffect.createOneShot (duration, vibrationAmplitude));
+				vibrator.vibrate (VibrationEffect.createOneShot (duration, VibrationEffect.DEFAULT_AMPLITUDE));
 
 			} else {
 
@@ -378,21 +628,17 @@ public class GameActivity extends SDLActivity {
 			int periodMS = (int)Math.ceil (period / 2.0);
 			int count = (int)Math.ceil (duration / (double) periodMS);
 			long[] pattern = new long[count];
-			int[] amplitudes = new int[count];
 
-			for (int i = 0; i < count; i++) {
+			// the first entry is the delay before vibration starts, so leave it as 0
+			for (int i = 1; i < count; i++) {
 
-				// the first entry is the delay before vibration starts, so leave it as 0
-				if (i > 0)
-					pattern[i] = periodMS;
-
-				amplitudes[i] = vibrationAmplitude;
+				pattern[i] = periodMS;
 
 			}
 
 			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
 
-				vibrator.vibrate (VibrationEffect.createWaveform (pattern, amplitudes, -1));
+				vibrator.vibrate (VibrationEffect.createWaveform (pattern, -1));
 
 			} else {
 

@@ -15,10 +15,11 @@ class Asset
 	public var glyphs:String;
 	public var id:String;
 	public var library:String;
+	// public var path:String;
+	// public var rename:String;
 	public var resourceName:String;
 	public var sourcePath:String;
 	public var targetPath:String;
-	public var deliveryPackName:String;
 	public var type:AssetType;
 
 	public function new(path:String = "", rename:String = "", type:AssetType = null, embed:Null<Bool> = null, setDefaults:Bool = true)
@@ -26,7 +27,6 @@ class Asset
 		if (!setDefaults) return;
 
 		this.embed = embed;
-
 		sourcePath = Path.standardize(path);
 
 		if (rename == "")
@@ -43,12 +43,10 @@ class Asset
 		flatName = StringTools.getFlatName(targetPath);
 		format = Path.extension(path).toLowerCase();
 		glyphs = "32-255";
-		deliveryPackName = '';
 
 		if (type == null)
 		{
 			var extension = Path.extension(path);
-
 			if (extension != null) extension = extension.toLowerCase();
 
 			if (AssetHelper.knownExtensions.exists(extension))
@@ -67,6 +65,7 @@ class Asset
 						{
 							var stat = FileSystem.stat(path);
 
+							// if (stat.size > 1024 * 128) {
 							if (stat.size > 1024 * 1024)
 							{
 								this.type = AssetType.MUSIC;
@@ -102,6 +101,7 @@ class Asset
 	public function clone():Asset
 	{
 		var asset = new Asset("", "", null, null, false);
+
 		asset.data = data;
 		asset.embed = embed;
 		asset.encoding = encoding;
@@ -113,8 +113,10 @@ class Asset
 		asset.resourceName = resourceName;
 		asset.sourcePath = sourcePath;
 		asset.targetPath = targetPath;
-		asset.deliveryPackName = deliveryPackName;
 		asset.type = type;
+
+		// ObjectTools.copyFields (this, asset);
+
 		return asset;
 	}
 }

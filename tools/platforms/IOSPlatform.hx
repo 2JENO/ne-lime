@@ -102,6 +102,13 @@ class IOSPlatform extends PlatformTarget
 			defaults.windows.push(defaults.window);
 		}
 
+		if (defaults.launchStoryboard == null)
+		{
+			defaults.launchStoryboard = new LaunchStoryboard();
+
+			defaults.launchStoryboard.template = "LaunchScreen.storyboard";
+		}
+
 		defaults.merge(project);
 		project = defaults;
 
@@ -170,6 +177,11 @@ class IOSPlatform extends PlatformTarget
 			project.haxeflags.push("-xml " + targetDirectory + "/types.xml");
 		}
 
+		if (project.targetFlags.exists("json"))
+		{
+			project.haxeflags.push("--json " + targetDirectory + "/types.json");
+		}
+
 		if (project.targetFlags.exists("final"))
 		{
 			project.haxedefs.set("final", "");
@@ -181,7 +193,6 @@ class IOSPlatform extends PlatformTarget
 		}
 
 		IOSHelper.getIOSVersion(project);
-
 		project.haxedefs.set("IPHONE_VER", project.environment.get("IPHONE_VER"));
 
 		if (project.config.getString("ios.compiler") == "llvm" || project.config.getString("ios.compiler", "clang") == "clang")
@@ -214,8 +225,7 @@ class IOSPlatform extends PlatformTarget
 			if (!StringTools.endsWith(dependency.name, ".framework")
 				&& !StringTools.endsWith(dependency.name, ".tbd")
 				&& !StringTools.endsWith(dependency.path, ".framework")
-				&& !StringTools.endsWith(dependency.path, ".xcframework")
-				&& !StringTools.endsWith(dependency.path, ".bundle"))
+				&& !StringTools.endsWith(dependency.path, ".xcframework"))
 			{
 				if (dependency.path != "")
 				{
@@ -367,12 +377,7 @@ class IOSPlatform extends PlatformTarget
 
 		context.ADDL_PBX_BUILD_FILE = "";
 		context.ADDL_PBX_FILE_REFERENCE = "";
-
-		context.ADDL_PBX_RESOURCES_BUILD_PHASE = "";
 		context.ADDL_PBX_FRAMEWORKS_BUILD_PHASE = "";
-		context.ADDL_PBX_EMBED_FRAMEWORKS_BUILD_PHASE = "";
-
-		context.ADDL_PBX_RESOURCE_GROUP = "";
 		context.ADDL_PBX_FRAMEWORK_GROUP = "";
 
 		context.frameworkSearchPaths = [];
@@ -382,71 +387,45 @@ class IOSPlatform extends PlatformTarget
 			var name = null;
 			var path = null;
 			var fileType = null;
-			var embed = null;
 
-			if (Path.extension(dependency.name) == "tbd")
-			{
-				name = dependency.name;
-				path = "/usr/lib/" + dependency.name;
-				fileType = "sourcecode.text-based-dylib-definition";
-				embed = false;
-			}
-			else if (Path.extension(dependency.name) == "framework")
+			if (Path.extension(dependency.name) == "framework")
 			{
 				name = dependency.name;
 				path = "/System/Library/Frameworks/" + dependency.name;
 				fileType = "wrapper.framework";
-				embed = false;
+			}
+			else if (Path.extension(dependency.name) == "tbd")
+			{
+				name = dependency.name;
+				path = "/usr/lib/" + dependency.name;
+				fileType = "sourcecode.text-based-dylib-definition";
 			}
 			else if (Path.extension(dependency.path) == "framework")
 			{
 				name = Path.withoutDirectory(dependency.path);
 				path = Path.tryFullPath(dependency.path);
 				fileType = "wrapper.framework";
-				embed = dependency.embed;
 			}
 			else if (Path.extension(dependency.path) == "xcframework")
 			{
 				name = Path.withoutDirectory(dependency.path);
 				path = Path.tryFullPath(dependency.path);
 				fileType = "wrapper.xcframework";
-				embed = false;
-			}
-			else if (Path.extension(dependency.path) == "bundle")
-			{
-				name = Path.withoutDirectory(dependency.path);
-				path = Path.tryFullPath(dependency.path);
-				fileType = "wrapper.plug-in";
-				embed = false;
 			}
 
 			if (name != null)
 			{
-				var buildFileID = "11C0000000000018" + StringTools.getUniqueID();
+				var frameworkID = "11C0000000000018" + StringTools.getUniqueID();
 				var fileID = "11C0000000000018" + StringTools.getUniqueID();
-				var embedFileID = "11C0000000000018" + StringTools.getUniqueID();
 
-				switch (fileType)
-				{
-					case "wrapper.plug-in":
-						context.ADDL_PBX_BUILD_FILE += "        " + buildFileID + " /* " + name + " in Resources */ = {isa = PBXBuildFile; fileRef = " + fileID + " /* " + name + " */; };\n";
-						context.ADDL_PBX_RESOURCES_BUILD_PHASE += "                " + buildFileID + " /* " + name + " in Resources */,\n";
-						context.ADDL_PBX_RESOURCE_GROUP += "                " + fileID + " /* " + name + " */,\n";
-					case "wrapper.framework", "wrapper.xcframework", "sourcecode.text-based-dylib-definition":
-						context.ADDL_PBX_BUILD_FILE += "        " + buildFileID + " /* " + name + " in Frameworks */ = {isa = PBXBuildFile; fileRef = " + fileID + " /* " + name + " */; };\n";
-						context.ADDL_PBX_FRAMEWORKS_BUILD_PHASE += "                " + buildFileID + " /* " + name + " in Frameworks */,\n";
-						context.ADDL_PBX_FRAMEWORK_GROUP += "                " + fileID + " /* " + name + " */,\n";
+				ArrayTools.addUnique(context.frameworkSearchPaths, Path.directory(path));
 
-						if (embed == true)
-						{
-							context.ADDL_PBX_BUILD_FILE += "        " + embedFileID + " /* " + name + " in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = " + fileID + " /* " + name + " */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy); }; };\n";
-							context.ADDL_PBX_EMBED_FRAMEWORKS_BUILD_PHASE += "                " + embedFileID + " /* " + name + " in Embed Frameworks */,\n";
-						}
-
-						ArrayTools.addUnique(context.frameworkSearchPaths, Path.directory(path));
-				}
-
-				context.ADDL_PBX_FILE_REFERENCE += "        " + fileID + " /* " + name + " */ = {isa = PBXFileReference; lastKnownFileType = \"" + fileType + "\"; name = \"" + name + "\"; path = \"" + path + "\"; sourceTree = SDKROOT; };\n";
+				context.ADDL_PBX_BUILD_FILE += "		" + frameworkID + " /* " + name + " in Frameworks */ = {isa = PBXBuildFile; fileRef = " + fileID + " /* "
+					+ name + " */; };\n";
+				context.ADDL_PBX_FILE_REFERENCE += "		" + fileID + " /* " + name + " */ = {isa = PBXFileReference; lastKnownFileType = \"" + fileType
+					+ "\"; name = \"" + name + "\"; path = \"" + path + "\"; sourceTree = SDKROOT; };\n";
+				context.ADDL_PBX_FRAMEWORKS_BUILD_PHASE += "				" + frameworkID + " /* " + name + " in Frameworks */,\n";
+				context.ADDL_PBX_FRAMEWORK_GROUP += "				" + fileID + " /* " + name + " */,\n";
 			}
 		}
 
@@ -484,7 +463,9 @@ class IOSPlatform extends PlatformTarget
 			context.HAXELIB_PATH = '';
 		}
 
-		context.IOS_INFO_PLIST_CHILDREN = project.config.get("ios.info-plist-children");
+		context.CATEGORY_TYPE = project.config.getString("ios.category_type", "public.app-category.entertainment");
+
+		context.SHARE_FILES = project.haxedefs.exists("SHARE_MOBILE_FILES");
 
 		return context;
 	}
@@ -519,21 +500,21 @@ class IOSPlatform extends PlatformTarget
 		var armv6 = (project.architectures.indexOf(Architecture.ARMV6) > -1 && !project.targetFlags.exists("simulator"));
 		var armv7 = (project.architectures.indexOf(Architecture.ARMV7) > -1 && !project.targetFlags.exists("simulator"));
 		var armv7s = (project.architectures.indexOf(Architecture.ARMV7S) > -1 && !project.targetFlags.exists("simulator"));
-		var arm64 = (command == "rebuild" || (project.architectures.indexOf(Architecture.ARM64) > -1));
+		var arm64 = (command == "rebuild"
+			|| (project.architectures.indexOf(Architecture.ARM64) > -1 && !project.targetFlags.exists("simulator")));
 		var i386 = (project.architectures.indexOf(Architecture.X86) > -1 && project.targetFlags.exists("simulator"));
-		var x86_64 = (command == "rebuild" || project.architectures.indexOf(Architecture.X64) > -1 && project.targetFlags.exists("simulator"));
+		var x86_64 = (command == "rebuild" || project.targetFlags.exists("simulator"));
 
 		var arc = (project.targetFlags.exists("arc"));
 
 		var commands = [];
 
-		if (armv6) commands.push(["-Dios", "-DHXCPP_ARMV6"]);
-		if (armv7) commands.push(["-Dios", "-DHXCPP_ARMV7"]);
-		if (armv7s) commands.push(["-Dios", "-DHXCPP_ARMV7S"]);
-		if (arm64) commands.push(["-Dios", "-DHXCPP_ARM64"]);
-		if (arm64 && project.targetFlags.exists("simulator")) commands.push(["-Dios", "-Dsimulator", "-DHXCPP_ARM64"]);
-		if (i386) commands.push(["-Dios", "-Dsimulator", "-DHXCPP_M32"]);
-		if (x86_64) commands.push(["-Dios", "-Dsimulator", "-DHXCPP_M64"]);
+		if (armv6) commands.push(["-Dios", "-DHXCPP_CPP11", "-DHXCPP_ARMV6"]);
+		if (armv7) commands.push(["-Dios", "-DHXCPP_CPP11", "-DHXCPP_ARMV7"]);
+		if (armv7s) commands.push(["-Dios", "-DHXCPP_CPP11", "-DHXCPP_ARMV7S"]);
+		if (arm64) commands.push(["-Dios", "-DHXCPP_CPP11", "-DHXCPP_ARM64"]);
+		if (i386) commands.push(["-Dios", "-Dsimulator", "-DHXCPP_M32", "-DHXCPP_CPP11"]);
+		if (x86_64) commands.push(["-Dios", "-Dsimulator", "-DHXCPP_M64", "-DHXCPP_CPP11"]);
 
 		if (arc)
 		{
@@ -623,21 +604,28 @@ class IOSPlatform extends PlatformTarget
 
 		var iconPath = Path.combine(projectDirectory, "Images.xcassets/AppIcon.appiconset");
 		System.mkdir(iconPath);
-
-		var icons = project.icons;
-
-		if (icons.length == 0)
-		{
-			icons = [new Icon(System.findTemplate(project.templatePaths, "default/icon.svg"))];
+		//* P-Slice code
+		if(!project.config.exists("ios.pslice-icon-dir")){
+			Log.error("You need to set \"ios.pslice-icon-dir\" to a folder with your icon. Yes, we need that too now!");
+			return;
 		}
+		System.recursiveCopy(project.config.getString("ios.pslice-icon-dir"),iconPath);
+		//*
 
-		for (iconSize in iconSizes)
-		{
-			if (!IconHelper.createIcon(icons, iconSize.size, iconSize.size, Path.combine(iconPath, iconSize.name)))
-			{
-				context.HAS_ICON = false;
-			}
-		}
+		// var icons = project.icons;
+
+		// if (icons.length == 0)
+		// {
+		// 	icons = [new Icon(System.findTemplate(project.templatePaths, "default/icon.svg"))];
+		// }
+
+		// for (iconSize in iconSizes)
+		// {
+		// 	if (!IconHelper.createIcon(icons, iconSize.size, iconSize.size, Path.combine(iconPath, iconSize.name)))
+		// 	{
+		// 		context.HAS_ICON = false;
+		// 	}
+		// }
 
 		if (project.launchStoryboard != null)
 		{
@@ -829,11 +817,9 @@ class IOSPlatform extends PlatformTarget
 
 		System.mkdir(projectDirectory + "/lib");
 
-		for (archID in 0...7)
+		for (archID in 0...6)
 		{
-			var arch = ["armv6", "armv7", "armv7s", "arm64", "i386", "x86_64", "arm64-sim"][archID];
-			var arm64Device:Bool = context.ARM64 && !project.targetFlags.exists("simulator");
-			var arm64Sim:Bool = context.ARM64 && project.targetFlags.exists("simulator");
+			var arch = ["armv6", "armv7", "armv7s", "arm64", "i386", "x86_64"][archID];
 
 			if (arch == "armv6" && !context.ARMV6) continue;
 
@@ -841,13 +827,9 @@ class IOSPlatform extends PlatformTarget
 
 			if (arch == "armv7s" && !context.ARMV7S) continue;
 
-			if (arch == "arm64" && !arm64Device) continue;
+			if (arch == "arm64" && !context.ARM64) continue;
 
 			if (arch == "i386" && !context.I386) continue;
-
-			if (arch == "x86_64" && context.ARM64 && !context.X86_64) continue;
-
-			if (arch == "arm64-sim" && !arm64Sim) continue;
 
 			var libExt = [
 				".iphoneos.a",
@@ -855,11 +837,8 @@ class IOSPlatform extends PlatformTarget
 				".iphoneos-v7s.a",
 				".iphoneos-64.a",
 				".iphonesim.a",
-				".iphonesim-64.a",
-				".iphonesim-arm64.a",
+				".iphonesim-64.a"
 			][archID];
-
-			if (arch == 'arm64-sim') arch = 'arm64';
 
 			System.mkdir(projectDirectory + "/lib/" + arch);
 			System.mkdir(projectDirectory + "/lib/" + arch + "-debug");
@@ -913,24 +892,20 @@ class IOSPlatform extends PlatformTarget
 
 		for (asset in project.assets)
 		{
-			if (asset.type != AssetType.TEMPLATE)
+			if (asset.embed != true)
 			{
-				var targetPath = Path.combine(projectDirectory + "/assets/", asset.resourceName);
-
-				// var sourceAssetPath:String = projectDirectory + "haxe/" + asset.sourcePath;
-
-				System.mkdir(Path.directory(targetPath));
-				AssetHelper.copyAssetIfNewer(asset, targetPath);
-
-				// System.mkdir (Path.directory (sourceAssetPath));
-				// System.linkFile (flatAssetPath, sourceAssetPath, true, true);
-			}
-			else
-			{
-				var targetPath = Path.combine(projectDirectory, asset.targetPath);
-
-				System.mkdir(Path.directory(targetPath));
-				AssetHelper.copyAsset(asset, targetPath, context);
+				if (asset.type != AssetType.TEMPLATE)
+				{
+					var targetPath = Path.combine(projectDirectory + "/assets/", asset.resourceName);
+					System.mkdir(Path.directory(targetPath));
+					AssetHelper.copyAssetIfNewer(asset, targetPath);
+				}
+				else
+				{
+					var targetPath = Path.combine(projectDirectory, asset.targetPath);
+					System.mkdir(Path.directory(targetPath));
+					AssetHelper.copyAsset(asset, targetPath, context);
+				}
 			}
 		}
 

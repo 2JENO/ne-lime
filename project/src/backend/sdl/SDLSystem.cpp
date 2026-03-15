@@ -1,6 +1,7 @@
 #include <graphics/PixelFormat.h>
 #include <math/Rectangle.h>
 #include <system/Clipboard.h>
+#include <system/Display.h>
 #include <system/DisplayMode.h>
 #include <system/JNI.h>
 #include <system/System.h>
@@ -38,10 +39,10 @@
 #include <SDL.h>
 #include <string>
 
-#ifdef HX_WINDOWS
 #include <locale>
 #include <codecvt>
-#endif
+
+using wstring_convert = std::wstring_convert<std::codecvt_utf8<wchar_t>>;
 
 
 namespace lime {
@@ -52,10 +53,12 @@ namespace lime {
 	static int id_dpi;
 	static int id_height;
 	static int id_name;
+	static int id_orientation;
 	static int id_pixelFormat;
 	static int id_refreshRate;
 	static int id_supportedModes;
 	static int id_width;
+	static int id_safeArea;
 	static bool init = false;
 
 
@@ -91,13 +94,6 @@ namespace lime {
 	}
 
 
-	int System::GetTicks () {
-
-		return SDL_GetTicks ();
-
-	}
-
-
 	bool System::GetAllowScreenTimeout () {
 
 		return SDL_IsScreenSaverEnabled ();
@@ -115,13 +111,15 @@ namespace lime {
 			case APPLICATION: {
 
 				char* path = SDL_GetBasePath ();
-				#ifdef HX_WINDOWS
-				std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-				result = new std::wstring (converter.from_bytes(path));
-				#else
-				result = new std::wstring (path, path + strlen (path));
-				#endif
-				SDL_free (path);
+
+				if (path != nullptr) {
+
+					wstring_convert converter;
+					result = new std::wstring (converter.from_bytes(path));
+					SDL_free (path);
+
+				}
+
 				break;
 
 			}
@@ -129,13 +127,15 @@ namespace lime {
 			case APPLICATION_STORAGE: {
 
 				char* path = SDL_GetPrefPath (company, title);
-				#ifdef HX_WINDOWS
-				std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-				result = new std::wstring (converter.from_bytes(path));
-				#else
-				result = new std::wstring (path, path + strlen (path));
-				#endif
-				SDL_free (path);
+
+				if (path != nullptr) {
+
+        			wstring_convert converter;
+					result = new std::wstring (converter.from_bytes(path));
+					SDL_free (path);
+
+				}
+
 				break;
 
 			}
@@ -149,11 +149,9 @@ namespace lime {
 
 				#elif defined (HX_WINDOWS)
 
-				char folderPath[MAX_PATH] = "";
-				SHGetFolderPath (NULL, CSIDL_DESKTOPDIRECTORY, NULL, SHGFP_TYPE_CURRENT, folderPath);
-				//WIN_StringToUTF8 (folderPath);
-				std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-				result = new std::wstring (converter.from_bytes (folderPath));
+				WCHAR folderPath[MAX_PATH] = L"";
+				SHGetFolderPathW (NULL, CSIDL_DESKTOPDIRECTORY, NULL, SHGFP_TYPE_CURRENT, folderPath);
+				result = new std::wstring (folderPath);
 
 				#elif defined (IPHONE)
 
@@ -163,14 +161,13 @@ namespace lime {
 
 				char const* home = getenv ("HOME");
 
-				if (home == NULL) {
+				if (home != NULL) {
 
-					return 0;
+					std::string path = std::string (home) + std::string ("/Desktop");
+					wstring_convert converter;
+					result = new std::wstring (converter.from_bytes(path));
 
 				}
-
-				std::string path = std::string (home) + std::string ("/Desktop");
-				result = new std::wstring (path.begin (), path.end ());
 
 				#endif
 				break;
@@ -186,11 +183,9 @@ namespace lime {
 
 				#elif defined (HX_WINDOWS)
 
-				char folderPath[MAX_PATH] = "";
-				SHGetFolderPath (NULL, CSIDL_MYDOCUMENTS, NULL, SHGFP_TYPE_CURRENT, folderPath);
-				//WIN_StringToUTF8 (folderPath);
-				std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-				result = new std::wstring (converter.from_bytes (folderPath));
+				WCHAR folderPath[MAX_PATH] = L"";
+				SHGetFolderPathW (NULL, CSIDL_MYDOCUMENTS, NULL, SHGFP_TYPE_CURRENT, folderPath);
+				result = new std::wstring (folderPath);
 
 				#elif defined (IPHONE)
 
@@ -207,7 +202,8 @@ namespace lime {
 				if (home != NULL) {
 
 					std::string path = std::string (home) + std::string ("/Documents");
-					result = new std::wstring (path.begin (), path.end ());
+					wstring_convert converter;
+					result = new std::wstring (converter.from_bytes(path));
 
 				}
 
@@ -224,11 +220,9 @@ namespace lime {
 
 				#elif defined (HX_WINDOWS)
 
-				char folderPath[MAX_PATH] = "";
-				SHGetFolderPath (NULL, CSIDL_FONTS, NULL, SHGFP_TYPE_CURRENT, folderPath);
-				//WIN_StringToUTF8 (folderPath);
-				std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-				result = new std::wstring (converter.from_bytes (folderPath));
+				WCHAR folderPath[MAX_PATH] = L"";
+				SHGetFolderPathW (NULL, CSIDL_FONTS, NULL, SHGFP_TYPE_CURRENT, folderPath);
+				result = new std::wstring (folderPath);
 
 				#elif defined (HX_MACOS)
 
@@ -264,11 +258,9 @@ namespace lime {
 
 				#elif defined (HX_WINDOWS)
 
-				char folderPath[MAX_PATH] = "";
-				SHGetFolderPath (NULL, CSIDL_PROFILE, NULL, SHGFP_TYPE_CURRENT, folderPath);
-				//WIN_StringToUTF8 (folderPath);
-				std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-				result = new std::wstring (converter.from_bytes (folderPath));
+				WCHAR folderPath[MAX_PATH] = L"";
+				SHGetFolderPathW (NULL, CSIDL_PROFILE, NULL, SHGFP_TYPE_CURRENT, folderPath);
+				result = new std::wstring (folderPath);
 
 				#elif defined (IPHONE)
 
@@ -285,7 +277,8 @@ namespace lime {
 				if (home != NULL) {
 
 					std::string path = std::string (home);
-					result = new std::wstring (path.begin (), path.end ());
+					wstring_convert converter;
+					result = new std::wstring (converter.from_bytes(path));
 
 				}
 
@@ -313,10 +306,12 @@ namespace lime {
 				id_dpi = val_id ("dpi");
 				id_height = val_id ("height");
 				id_name = val_id ("name");
+				id_orientation = val_id ("orientation");
 				id_pixelFormat = val_id ("pixelFormat");
 				id_refreshRate = val_id ("refreshRate");
 				id_supportedModes = val_id ("supportedModes");
 				id_width = val_id ("width");
+				id_safeArea = val_id ("safeArea");
 				init = true;
 
 			}
@@ -336,11 +331,22 @@ namespace lime {
 			SDL_GetDisplayBounds (id, &bounds);
 			alloc_field (display, id_bounds, Rectangle (bounds.x, bounds.y, bounds.w, bounds.h).Value ());
 
+			Rectangle safeAreaInsets;
+			Display::GetSafeAreaInsets(id, &safeAreaInsets);
+			alloc_field (display, id_safeArea,
+				Rectangle (bounds.x + safeAreaInsets.x,
+					bounds.y + safeAreaInsets.y,
+					bounds.w - safeAreaInsets.x - safeAreaInsets.width,
+					bounds.h - safeAreaInsets.y - safeAreaInsets.height).Value ());
+
 			float dpi = 72.0;
 			#ifndef EMSCRIPTEN
 			SDL_GetDisplayDPI (id, &dpi, NULL, NULL);
 			#endif
 			alloc_field (display, id_dpi, alloc_float (dpi));
+
+			SDL_DisplayOrientation orientation = SDL_GetDisplayOrientation(id);
+			alloc_field (display, id_orientation, alloc_int (orientation));
 
 			SDL_DisplayMode displayMode = { SDL_PIXELFORMAT_UNKNOWN, 0, 0, 0, 0 };
 			DisplayMode mode;
@@ -418,10 +424,12 @@ namespace lime {
 			const int id_dpi = hl_hash_utf8 ("dpi");
 			const int id_height = hl_hash_utf8 ("height");
 			const int id_name = hl_hash_utf8 ("name");
+			const int id_orientation = hl_hash_utf8 ("orientation");
 			const int id_pixelFormat = hl_hash_utf8 ("pixelFormat");
 			const int id_refreshRate = hl_hash_utf8 ("refreshRate");
 			const int id_supportedModes = hl_hash_utf8 ("supportedModes");
 			const int id_width = hl_hash_utf8 ("width");
+			const int id_safeArea = hl_hash_utf8 ("safeArea");
 			const int id_x = hl_hash_utf8 ("x");
 			const int id_y = hl_hash_utf8 ("y");
 
@@ -443,6 +451,7 @@ namespace lime {
 			SDL_Rect bounds = { 0, 0, 0, 0 };
 			SDL_GetDisplayBounds (id, &bounds);
 
+			////
 			vdynamic* _bounds = (vdynamic*)hl_alloc_dynobj ();
 			hl_dyn_seti (_bounds, id_x, &hlt_i32, bounds.x);
 			hl_dyn_seti (_bounds, id_y, &hlt_i32, bounds.y);
@@ -451,11 +460,27 @@ namespace lime {
 
 			hl_dyn_setp (display, id_bounds, &hlt_dynobj, _bounds);
 
+
+			Rectangle safeAreaInsets;
+			Display::GetSafeAreaInsets(id, &safeAreaInsets);
+
+			vdynamic* _safeArea = (vdynamic*)hl_alloc_dynobj ();
+			hl_dyn_seti (_safeArea, id_x, &hlt_i32, bounds.x + safeAreaInsets.x);
+			hl_dyn_seti (_safeArea, id_y, &hlt_i32, bounds.y + safeAreaInsets.y);
+			hl_dyn_seti (_safeArea, id_width, &hlt_i32, bounds.w - safeAreaInsets.x - safeAreaInsets.width);
+			hl_dyn_seti (_safeArea, id_height, &hlt_i32, bounds.h - safeAreaInsets.y - safeAreaInsets.height);
+
+			hl_dyn_setp (display, id_safeArea, &hlt_dynobj, _safeArea);
+
+
 			float dpi = 72.0;
 			#ifndef EMSCRIPTEN
 			SDL_GetDisplayDPI (id, &dpi, NULL, NULL);
 			#endif
 			hl_dyn_setf (display, id_dpi, dpi);
+
+			SDL_DisplayOrientation orientation = SDL_GetDisplayOrientation(id);
+			hl_dyn_seti (display, id_orientation, &hlt_i32, orientation);
 
 			SDL_DisplayMode displayMode = { SDL_PIXELFORMAT_UNKNOWN, 0, 0, 0, 0 };
 			DisplayMode mode;
@@ -544,45 +569,6 @@ namespace lime {
 	}
 
 
-	#if defined(ANDROID) || defined (IPHONE)
-	int System::GetFirstGyroscopeSensorId () {
-
-		int numSensors = SDL_NumSensors ();
-
-		for (int i = 0; i < numSensors; i++) {
-
-			if (SDL_SensorGetDeviceType (i) == SDL_SENSOR_GYRO) {
-
-				return SDL_SensorGetDeviceInstanceID(i);
-
-			}
-
-		}
-
-		return -1;
-
-	}
-
-	int System::GetFirstAccelerometerSensorId () {
-
-		int numSensors = SDL_NumSensors ();
-
-		for (int i = 0; i < numSensors; i++) {
-
-			if (SDL_SensorGetDeviceType (i) == SDL_SENSOR_ACCEL) {
-
-				return SDL_SensorGetDeviceInstanceID(i);
-
-			}
-
-		}
-
-		return -1;
-
-	}
-	#endif
-
-
 	int System::GetNumDisplays () {
 
 		return SDL_GetNumVideoDisplays ();
@@ -612,66 +598,6 @@ namespace lime {
 		return allow;
 
 	}
-
-
-	int System::GetDisplayOrientation(int displayIndex) {
-		int orientation = 0;
-		switch(SDL_GetDisplayOrientation(displayIndex)) {
-			case SDL_ORIENTATION_UNKNOWN:
-				orientation = 0;
-				break;
-			case SDL_ORIENTATION_LANDSCAPE:
-				orientation = 1;
-				break;
-			case SDL_ORIENTATION_LANDSCAPE_FLIPPED:
-				orientation = 2;
-				break;
-			case SDL_ORIENTATION_PORTRAIT:
-				orientation = 3;
-				break;
-			case SDL_ORIENTATION_PORTRAIT_FLIPPED:
-				orientation = 4;
-				break;
-		}
-
-		return orientation;
-	}
-
-	std::wstring* System::GetHint (const char* key) {
-		std::string hintKey(key);
-
-    if (hintKey.rfind("SDL_", 0) != 0) {
-			hintKey = "SDL_" + hintKey;
-    }
-
-    SDL_GetHint(hintKey.c_str());
-
-		const char* raw = SDL_GetHint(hintKey.c_str());
-		if (!raw) {
-			return nullptr;
-		}
-
-		std::string hint = std::string (raw);
-		std::wstring* _hint = new std::wstring (hint.begin (), hint.end ());
-		return _hint;
-	}
-
-
-
-	#if !defined(IPHONE)
-	void System::OpenFile (const char* path) {
-
-		OpenURL (path, NULL);
-
-	}
-
-
-	void System::OpenURL (const char* url, const char* target) {
-
-		SDL_OpenURL (url);
-
-	}
-	#endif
 
 
 	FILE* FILE_HANDLE::getFile () {

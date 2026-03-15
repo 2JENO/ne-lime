@@ -1,6 +1,9 @@
 package lime.utils;
 
 import haxe.PosInfos;
+/* #if !macro
+import funkin.backend.system.Logs as FunkinLogs;
+#end */
 
 #if !lime_debug
 @:fileXml('tags="haxe,release"')
@@ -9,7 +12,7 @@ import haxe.PosInfos;
 class Log
 {
 	public static var level:LogLevel;
-	public static var throwErrors:Bool = true;
+	public static var throwErrors:Bool = false;
 
 	public static function debug(message:Dynamic, ?info:PosInfos):Void
 	{
@@ -27,8 +30,6 @@ class Log
 	{
 		if (level >= LogLevel.ERROR)
 		{
-			var message = "[" + info.className + "] ERROR: " + message;
-
 			if (throwErrors)
 			{
 				#if webassembly
@@ -38,10 +39,10 @@ class Log
 			}
 			else
 			{
-				#if js
-				untyped #if haxe4 js.Syntax.code #else __js__ #end ("console").error(message);
+				#if !macro
+				trace('[${info.className}] $message'/* , ERROR, RED */);
 				#else
-				println(message);
+				println("[" + info.className + "] ERROR: " + message);
 				#end
 			}
 		}
@@ -51,8 +52,8 @@ class Log
 	{
 		if (level >= LogLevel.INFO)
 		{
-			#if js
-			untyped #if haxe4 js.Syntax.code #else __js__ #end ("console").info("[" + info.className + "] " + message);
+			#if !macro
+			trace('[${info.className}] $message'/* , INFO, RED */);
 			#else
 			println("[" + info.className + "] " + Std.string(message));
 			#end
@@ -89,7 +90,11 @@ class Log
 	{
 		if (level >= LogLevel.VERBOSE)
 		{
+			#if !macro
+			trace('[${info.className}] $message');
+			#else
 			println("[" + info.className + "] " + message);
+			#end
 		}
 	}
 
@@ -97,8 +102,8 @@ class Log
 	{
 		if (level >= LogLevel.WARN)
 		{
-			#if js
-			untyped #if haxe4 js.Syntax.code #else __js__ #end ("console").warn("[" + info.className + "] WARNING: " + message);
+			#if !macro
+			trace('[${info.className}] $message'/* , WARNING, YELLOW */);
 			#else
 			println("[" + info.className + "] WARNING: " + Std.string(message));
 			#end

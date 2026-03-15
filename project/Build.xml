@@ -1,15 +1,13 @@
 <xml>
-	<set name="HXCPP_CPP20" value="1" />
+
+	<set name="PLATFORM" value="android-21" if="android" />
+	<set name="HXCPP_CPP11" value="1" />
 
 	<include name="${HXCPP}/build-tool/BuildCommon.xml" />
 
-	<set name="HXCPP_ANDROID_PLATFORM" value="28" if="android" />
-	<set name="PLATFORM_NUMBER" value="28" if="android" />
-	<set name="HXCPP_IOS_MIN_VERSION" value="11.0" if="iphone" />
-	<setenv name="MACOSX_DEPLOYMENT_TARGET" value="10.13" if="mac" />
-
 	<set name="ios" value="1" if="iphone" />
 	<set name="tvos" value="1" if="appletv" />
+
 	<set name="LIME_CAIRO" value="1" />
 	<set name="LIME_CURL" value="1" unless="winrt" />
 	<set name="LIME_EFSW" value="1" if="windows || mac || linux" unless="winrt" />
@@ -23,9 +21,9 @@
 	<set name="LIME_MBEDTLS" value="1" unless="emscripten || winrt" />
 	<!-- <set name="LIME_NEKO" value="1" if="linux" /> -->
 	<set name="LIME_OGG" value="1" />
-	<set name="LIME_OPENALSOFT" value="1" if="windows || linux || mac || android || iphone" unless="tvos" />
-	<set name="LIME_OPENAL" value="1" if="webassembly || tvos" />
-	<set name="LIME_MOJOAL" value="1" if="switch || static_link || winrt || mojoal" unless="LIME_OPENAL || iphone LIME_OPENALSOFT" />
+	<set name="LIME_OPENALSOFT" value="1" if="windows || linux || mac || android" unless="static_link" />
+	<set name="LIME_OPENAL" value="1" if="iphone || webassembly || tvos" />
+	<set name="LIME_MOJOAL" value="1" if="switch || static_link || winrt || mojoal" unless="LIME_OPENAL" />
 	<unset name="LIME_OPENALSOFT" if="LIME_MOJOAL" />
 	<set name="LIME_OPENAL" value="1" if="LIME_OPENALSOFT" />
 	<set name="LIME_OPENAL" value="1" if="LIME_MOJOAL" />
@@ -317,6 +315,9 @@
 		<file name="src/system/CFFI.cpp" />
 		<file name="src/system/CFFIPointer.cpp" />
 		<file name="src/system/ClipboardEvent.cpp" />
+		<file name="src/system/Display.mm" if="mac || ios" />
+		<file name="src/system/OrientationEvent.cpp" />
+		<file name="src/system/Display.cpp" unless="mac || ios" />
 		<file name="src/system/DisplayMode.cpp" />
 		<file name="src/system/JNI.cpp" if="android" />
 		<file name="src/system/Locale.cpp" unless="mac || ios" />
@@ -345,6 +346,7 @@
 		<file name="${ANDROID_NDK_ROOT}/sources/android/cpufeatures/cpu-features.c" />
 
 	</files>
+
 	<!-- Run setup now so the submodule projects can determine whether clang or GCC will be used. -->
 	<!-- TODO: if https://github.com/HaxeFoundation/hxcpp/issues/930 ever gets resolved, use that instead. -->
 	<setup name="androidNdk" if="android" />
@@ -390,7 +392,7 @@
 		<files id="native-toolkit-harfbuzz" if="LIME_HARFBUZZ" />
 		<files id="native-toolkit-jpeg" if="LIME_JPEG" />
 		<files id="native-toolkit-lzma" if="LIME_LZMA" />
-		<files id="native-toolkit-mbedtls" if="LIME_MBEDTLS" />
+		<files id="native-toolkit-mbedtls" if="LIME_MBEDTLS" unless="static_link" />
 		<files id="native-toolkit-mojoal" if="LIME_MOJOAL" />
 		<files id="native-toolkit-neko" if="LIME_NEKO" />
 		<files id="native-toolkit-ogg" if="LIME_OGG" />
@@ -429,7 +431,6 @@
 				<lib name="shell32.lib" />
 				<lib name="comdlg32.lib" />
 				<lib name="setupapi.lib" />
-				<lib name="avrt.lib" if="LIME_OPENALSOFT"/>
 
 				<lib name="usp10.lib" if="LIME_HARFBUZZ" />
 				<lib name="rpcrt4.lib" if="LIME_HARFBUZZ" />
@@ -569,7 +570,6 @@
 		<target id="lime-legacy" if="lime-legacy" />
 
 	</target>
-	<copyFile name="lime.lib" from="obj/lib/" overwrite="true" toolId="dll" if="windows LIME_HASHLINK" unless="debug" />
-	<copyFile name="lime-debug.lib" from="obj/lib/" overwrite="true" toolId="dll" if="windows debug LIME_HASHLINK" />
+	<copyFile name="lime.lib" from="obj/lib/" overwrite="true" toolId="dll" if="windows LIME_HASHLINK" />
 
 </xml>
