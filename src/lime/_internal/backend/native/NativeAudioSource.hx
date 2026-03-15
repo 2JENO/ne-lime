@@ -2,18 +2,14 @@ package lime._internal.backend.native;
 
 import haxe.Int64;
 import haxe.Timer;
-import lime.app.Application;
 import lime.math.Vector4;
 import lime.media.openal.AL;
 import lime.media.openal.ALBuffer;
 import lime.media.openal.ALSource;
-import lime.media.vorbis.Vorbis;
 import lime.media.vorbis.VorbisFile;
-
 import lime.media.AudioManager;
 import lime.media.AudioSource;
 import lime.utils.UInt8Array;
-import lime.utils.ArrayBufferView;
 
 #if !lime_debug
 @:fileXml('tags="haxe,release"')
@@ -57,14 +53,6 @@ class NativeAudioSource
 	{
 		if (handle != null)
 		{
-			if (Application.current != null && !stream)
-			{
-				if (Application.current.onUpdate.has(checkPlay))
-				{
-					// trace('[AUDIO] removed play check event!');
-					Application.current.onUpdate.remove(checkPlay);
-				}
-			}
 			stop();
 			AL.sourcei(handle, AL.BUFFER, null);
 			AL.deleteSource(handle);
@@ -148,7 +136,7 @@ class NativeAudioSource
 			}
 		}
 
-		samples = Std.int((dataLength * 8) / (parent.buffer.channels * parent.buffer.bitsPerSample));
+		samples = Std.int((dataLength * 8.0) / (parent.buffer.channels * parent.buffer.bitsPerSample));
 	}
 
 	public function play():Void
@@ -198,8 +186,6 @@ class NativeAudioSource
 		else
 		{
 			var time = completed ? 0 : getCurrentTime();
-
-			AL.sourcePlay(handle);
 
 			setCurrentTime(time);
 		}
@@ -374,32 +360,6 @@ class NativeAudioSource
 		parent.onComplete.dispatch();
 	}
 
-	private function checkPlay(delta:Int):Void
-	{
-		final finished:Bool = AL.getSourcei(handle, AL.SOURCE_STATE) != AL.PLAYING;
-
-		if (!finished) return;
-		if (loops > 0)
-		{
-			playing = false;
-			loops--;
-			setCurrentTime(0);
-			play();
-			return;
-		}
-		else
-		{
-			if (!completed)	stop();
-		}
-
-		if (!completed)
-		{
-			// trace('[AUDIO] audio finished playing!');
-			parent.onComplete.dispatch();
-		}
-		completed = true;
-	}
-
 	// Get & Set Methods
 	public function getCurrentTime():Int
 	{
@@ -484,8 +444,8 @@ class NativeAudioSource
 			if (timeRemaining > 0)
 			{
 				completed = false;
-				// timer = new Timer(timeRemaining);
-				// timer.run = timer_onRun;
+				timer = new Timer(timeRemaining);
+				timer.run = timer_onRun;
 			}
 			else
 			{
@@ -538,13 +498,13 @@ class NativeAudioSource
 				timer.stop();
 			}
 
-			// var timeRemaining = Std.int((value - getCurrentTime()) / getPitch());
+			var timeRemaining = Std.int((value - getCurrentTime()) / getPitch());
 
-			// if (timeRemaining > 0)
-			// {
-			// 	timer = new Timer(timeRemaining);
-			// 	timer.run = timer_onRun;
-			// }
+			if (timeRemaining > 0)
+			{
+				timer = new Timer(timeRemaining);
+				timer.run = timer_onRun;
+			}
 		}
 
 		return length = value;
@@ -581,13 +541,13 @@ class NativeAudioSource
 				timer.stop();
 			}
 
-			// var timeRemaining = Std.int((getLength() - getCurrentTime()) / value);
+			var timeRemaining = Std.int((getLength() - getCurrentTime()) / value);
 
-			// if (timeRemaining > 0)
-			// {
-			// 	timer = new Timer(timeRemaining);
-			// 	timer.run = timer_onRun;
-			// }
+			if (timeRemaining > 0)
+			{
+				timer = new Timer(timeRemaining);
+				timer.run = timer_onRun;
+			}
 		}
 
 		if (handle != null)
