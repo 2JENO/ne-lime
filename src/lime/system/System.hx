@@ -605,7 +605,15 @@ class System
 	{
 		// executes first!!
 		#if (sys && !macro)
-		funkin.backend.system.Main.preInit();
+		var funkinMainClass = Type.resolveClass("funkin.backend.system.Main");
+		if (funkinMainClass != null)
+		{
+			var preInit = Reflect.field(funkinMainClass, "preInit");
+			if (Reflect.isFunction(preInit))
+			{
+				Reflect.callMethod(funkinMainClass, preInit, []);
+			}
+		}
 		#end
 
 		if (__applicationEntryPoint == null)
